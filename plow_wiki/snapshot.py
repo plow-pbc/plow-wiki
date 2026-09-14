@@ -26,6 +26,8 @@ HOUSEKEEPING = frozenset(
         ".wiki",
         ".obsidian",
         "_raw",
+        "_archived",
+        "_staging",
         ".DS_Store",
     }
 )
@@ -65,20 +67,46 @@ def _refuse_undeclared_roots(wiki: Path) -> None:
 def _scan(diff: str) -> None:
     """Refuse on the first credential-shaped line, naming file and line, never the value."""
     current = None
+    previous = ""
     for raw in diff.splitlines():
-        if raw.startswith("+++ b/"):
+        if raw.startswith("+++ b/") and previous.startswith("--- "):
             current = raw[6:]
-            continue
-        if raw.startswith("+") and not raw.startswith("+++") and CREDENTIAL.search(raw):
+        elif raw.startswith("+") and not raw.startswith("+++") and CREDENTIAL.search(raw):
             sys.exit(
                 f"refusing — what looks like an API credential is in {current}; "
                 "inspect it by hand; nothing was committed"
             )
+        previous = raw
+
+
+def _has_origin(wiki: Path) -> bool:
+    return (
+        history_dir(wiki).is_dir()
+        and _git(wiki, "remote", "get-url", "origin", check=False).returncode == 0
+    )
+
+
+def _scan_before_push(wiki: Path) -> None:
+    """Fail closed: scan everything about to leave the machine, never a silent no-op."""
+    ref = _git(wiki, "ls-remote", "--exit-code", "origin", "main", check=False)
+    if ref.returncode == 2:  # origin has no main yet: first push, scan all local history
+        _scan(_git(wiki, "log", "-p", "--cc", "--no-color", "--text", "HEAD", check=False).stdout)
+        return
+    if ref.returncode != 0:
+        sys.exit("--push: cannot reach origin/main; nothing was committed")
+    if _git(wiki, "fetch", "-q", "origin", "main", check=False).returncode != 0:
+        sys.exit("--push: cannot reach origin/main; nothing was committed")
+    log = _git(wiki, "log", "-p", "--cc", "--no-color", "--text", "FETCH_HEAD..HEAD", check=False)
+    if log.returncode != 0:
+        sys.exit("--push: cannot reach origin/main; nothing was committed")
+    _scan(log.stdout)
 
 
 def snapshot(wiki: Path, author: str, push: bool = False) -> str | None:
     paths.refuse_git_inside(wiki)
     _refuse_undeclared_roots(wiki)
+    if push and not _has_origin(wiki):
+        sys.exit(f"--push: {history_dir(wiki)} has no 'origin' remote")
     _ensure_repo(wiki)
     _git(wiki, "add", "-A")
     has_head = _git(wiki, "rev-parse", "--verify", "HEAD", check=False).returncode == 0
@@ -88,12 +116,8 @@ def snapshot(wiki: Path, author: str, push: bool = False) -> str | None:
     if not staged.strip():
         return None
     _scan(staged)
-    if push and _git(wiki, "remote", "get-url", "origin", check=False).returncode == 0:
-        _git(wiki, "fetch", "-q", "origin", "main", check=False)
-        unsent = _git(
-            wiki, "log", "-p", "--cc", "--no-color", "--text", "FETCH_HEAD..HEAD", check=False
-        ).stdout
-        _scan(unsent)
+    if push:
+        _scan_before_push(wiki)
     identity = {
         "GIT_AUTHOR_NAME": author,
         "GIT_AUTHOR_EMAIL": f"{author}@plow.local",
@@ -108,15 +132,20 @@ def snapshot(wiki: Path, author: str, push: bool = False) -> str | None:
         f"wiki snapshot {datetime.now(UTC).date().isoformat()}",
         **identity,
     )
-    if push:
-        if _git(wiki, "remote", "get-url", "origin", check=False).returncode != 0:
-            sys.exit(f"--push: {history_dir(wiki)} has no 'origin' remote")
-        _git(wiki, "push", "-q", "origin", "HEAD:main")
+    if push and _git(wiki, "push", "-q", "origin", "HEAD:main", check=False).returncode != 0:
+        sys.exit(
+            "--push: push to origin was rejected; run "
+            f"`git --git-dir {history_dir(wiki)} push origin HEAD:main` by hand to see why"
+        )
     return _git(wiki, "rev-parse", "--short", "HEAD").stdout.strip()
 
 
 def history(wiki: Path, page: str) -> list[str]:
     if not history_dir(wiki).is_dir():
         sys.exit("no history repo yet — run wiki snapshot first")
-    out = _git(wiki, "log", "--format=%h %ad %an", "--date=short", "--stat", "--", page).stdout
-    return [ln for ln in out.splitlines() if ln.strip()]
+    result = _git(
+        wiki, "log", "--format=%h %ad %an", "--date=short", "--stat", "--", page, check=False
+    )
+    if result.returncode != 0:
+        return []
+    return [ln for ln in result.stdout.splitlines() if ln.strip()]
