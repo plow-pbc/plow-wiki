@@ -1,12 +1,10 @@
 import json
 import os
 import tomllib
-from pathlib import Path
 
 import pytest
 
-from tests.conftest import run_wiki
-from tests.test_index import SCHEDULING_SCHEMA, _rel
+from tests.conftest import REPO, run_wiki
 
 
 def test_wiki_help_names_every_subcommand():
@@ -118,29 +116,22 @@ def test_snapshot_cli_reports_sha_then_nothing(wiki):
     assert "nothing to snapshot" in second.stdout
 
 
-def test_nightly_end_to_end(wiki):
-    (wiki / "wiki.toml").write_text(
-        (wiki / "wiki.toml").read_text() + '[roots.scheduling]\nwriter = "calendaring"\n'
-    )
-    (wiki / "scheduling").mkdir()
-    (wiki / "scheduling" / "_schema.md").write_text(SCHEDULING_SCHEMA)
-    d = wiki / "scheduling" / "pipelines" / "fundraising"
-    d.mkdir(parents=True)
-    (d / "acme.md").write_text(_rel("Acme Capital", "scheduling", "2026-09-20"))
-    env = {**os.environ, "WIKI_PATH": str(wiki), "WIKI_AUTHOR": "calendaring"}
+def test_nightly_end_to_end(sched_wiki):
+    env = {**os.environ, "WIKI_PATH": str(sched_wiki), "WIKI_AUTHOR": "calendaring"}
     for cmd in (["validate"], ["index"], ["snapshot"]):
         result = run_wiki(*cmd, env=env)
         assert result.returncode == 0, (cmd, result.stdout, result.stderr)
-    assert "Acme Capital" in (wiki / "index.md").read_text()
-    assert "## scheduling" in (wiki / "scheduling" / "pipelines" / "fundraising.md").read_text()
+    assert "Acme Capital" in (sched_wiki / "index.md").read_text()
+    table = sched_wiki / "scheduling" / "pipelines" / "fundraising.md"
+    assert "## scheduling" in table.read_text()
     hist = run_wiki("history", "scheduling/pipelines/fundraising/acme.md", env=env)
     assert "calendaring" in hist.stdout
 
 
 def test_latch_manifest_matches_the_cli():
-    manifest = json.loads(Path("latch-plugin.json").read_text())
+    manifest = json.loads((REPO / "latch-plugin.json").read_text())
     assert manifest["command"] == "wiki"
-    assert manifest["skill"] == "skill.md" and Path("skill.md").is_file()
+    assert manifest["skill"] == "skill.md" and (REPO / "skill.md").is_file()
     argv = {bucket: {tuple(a) for a in cmds} for bucket, cmds in manifest["argv"].items()}
     assert argv["read"] == {("validate",), ("history",)}  # a command that writes is not a read
     assert argv["write"] == {("init",), ("index",), ("snapshot",)}
@@ -224,4 +215,4 @@ def test_validate_names_a_root_that_has_no_schema(wiki):
 
 
 def test_gitignore_keeps_review_artifacts_and_build_output_out_of_the_sdist():
-    assert {".superpowers/", "dist/"} <= set(Path(".gitignore").read_text().split())
+    assert {".superpowers/", "dist/"} <= set((REPO / ".gitignore").read_text().split())
