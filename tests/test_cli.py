@@ -65,3 +65,11 @@ def test_validate_passes_a_clean_wiki(wiki):
     result = run_wiki("validate", "--wiki", str(wiki))
     assert result.returncode == 0
     assert "validated 1 pages" in result.stdout
+
+
+def test_index_prints_what_it_wrote(wiki):
+    (wiki / "people" / "jane-doe.md").write_text(_page())
+    result = run_wiki("index", "--wiki", str(wiki))
+    assert result.returncode == 0
+    assert "index.md" in result.stdout
+    assert "[[people/jane-doe|Jane Doe]]" in (wiki / "index.md").read_text()

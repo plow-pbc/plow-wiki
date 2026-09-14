@@ -8,6 +8,7 @@ import sys
 from importlib import resources
 from pathlib import Path
 
+from plow_wiki import index as index_mod
 from plow_wiki import paths
 from plow_wiki.frontmatter import FrontmatterError, parse
 from plow_wiki.schema import load_schema, validate_page
@@ -83,6 +84,13 @@ def cmd_validate(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_index(args: argparse.Namespace) -> int:
+    wiki = paths.resolve_wiki(args.wiki)
+    for path in index_mod.build(wiki, force=args.force):
+        print(path.relative_to(wiki))
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     wiki_arg = argparse.ArgumentParser(add_help=False)
     wiki_arg.add_argument("--wiki", help="wiki path (default: $WIKI_PATH or ~/Plow/wiki)")
@@ -102,6 +110,10 @@ def build_parser() -> argparse.ArgumentParser:
         p = sub.add_parser(name, parents=[wiki_arg])
         if name == "validate":
             p.set_defaults(func=cmd_validate)
+            continue
+        if name == "index":
+            p.add_argument("--force", action="store_true")
+            p.set_defaults(func=cmd_index)
             continue
         p.set_defaults(func=lambda args: sys.exit(f"wiki {args.command}: not implemented"))
 
