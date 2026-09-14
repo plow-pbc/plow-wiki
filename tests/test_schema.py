@@ -75,3 +75,8 @@ def test_load_schema_refuses_a_missing_or_malformed_schema(tmp_path, contents, f
     with pytest.raises(SystemExit) as e:
         load_schema(root)
     assert fragment in str(e.value)
+
+
+def test_a_schema_without_a_root_key_still_loads(tmp_path):
+    (tmp_path / "_schema.md").write_text("---\nrequired: [title]\n---\n")
+    assert load_schema(tmp_path).required == ["title"]

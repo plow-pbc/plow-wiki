@@ -1,6 +1,7 @@
 import hashlib
 import json
 import re
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -149,3 +150,19 @@ def test_a_newline_summary_and_a_pipe_title_forge_neither_a_line_nor_a_column(sc
     rows = [ln for ln in table.splitlines() if ln.startswith("| [[")]
     assert len({len(re.split(r"(?<!\\)\|", ln)) for ln in rows}) == 1, rows
     assert "Acme \\| Capital" in table
+
+
+def test_generated_updated_comes_from_the_pages_not_the_clock(sched_wiki):
+    _with_field(
+        sched_wiki / "scheduling" / "pipelines" / "fundraising" / "beta.md", updated="2026-09-08"
+    )
+    build(sched_wiki)
+    for target in ("index.md", "scheduling/pipelines/fundraising.md"):
+        meta, _ = parse((sched_wiki / target).read_text())
+        assert str(meta["updated"]) == "2026-09-08", target
+
+
+def test_generated_updated_falls_back_to_today_when_no_page_carries_one(wiki):
+    build(wiki)
+    meta, _ = parse((wiki / "index.md").read_text())
+    assert str(meta["updated"]) == datetime.now(UTC).date().isoformat()

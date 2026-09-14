@@ -15,7 +15,6 @@ _WIKILINK = re.compile(r"^\[\[[^\]]+\]\]$")
 
 @dataclass
 class Schema:
-    root: str
     required: list[str]
     fields: dict[str, dict] = field(default_factory=dict)
     tables: list[dict] = field(default_factory=list)
@@ -30,7 +29,6 @@ def load_schema(root_dir: Path) -> Schema:
     except FrontmatterError as e:
         sys.exit(f"{path}: {e}")
     return Schema(
-        root=meta["root"],
         required=list(meta.get("required", [])),
         fields=dict(meta.get("fields", {})),
         tables=list(meta.get("tables", [])),

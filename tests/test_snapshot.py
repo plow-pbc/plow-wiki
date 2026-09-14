@@ -176,3 +176,10 @@ def test_history_finds_a_page_when_run_from_inside_the_wiki(wiki, monkeypatch):
     snapshot(wiki, author="a")
     monkeypatch.chdir(wiki / "people")
     assert sum(ln.endswith(" a") for ln in history(wiki, "people/jane.md")) == 1
+
+
+@pytest.mark.parametrize("name", [".trash", "_archived", ".obsidian"])
+def test_housekeeping_folders_do_not_count_as_undeclared_roots(wiki, name):
+    (wiki / name).mkdir()
+    (wiki / "people" / "jane.md").write_text("---\ntitle: Jane\n---\n")
+    assert snapshot(wiki, author="a")

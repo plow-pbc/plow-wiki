@@ -16,22 +16,11 @@ CREDENTIAL = re.compile(
     r"|xox[abpr]-[A-Za-z0-9-]{10}|AKIA[0-9A-Z]{16}|BEGIN [A-Z ]*PRIVATE KEY|eyJ[A-Za-z0-9_-]{20,}\."
 )
 _HUNK = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@")
-HOUSEKEEPING = frozenset(
-    {
-        "AGENTS.md",
-        "wiki.toml",
-        "index.md",
-        "log.md",
-        "hot.md",
-        ".manifest.json",
-        ".wiki",
-        ".obsidian",
-        "_raw",
-        "_archived",
-        "_staging",
-        ".DS_Store",
-    }
-)
+# Top-level paths that are not roots: what a page walk skips, less the two that are
+# per-root or refused outright, plus the wiki's own files.
+HOUSEKEEPING = (
+    paths.SKIP_DIRS | paths.SKIP_FILES | {"wiki.toml", ".manifest.json", ".DS_Store", ".trash"}
+) - {"_schema.md", ".git"}
 
 
 def history_dir(wiki: Path) -> Path:

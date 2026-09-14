@@ -41,6 +41,16 @@ def _link(wiki: Path, page: Path, meta: dict) -> str:
     return f"[[{target}|{_cell(meta.get('title', page.stem))}]]"
 
 
+def _generated_meta(title: str, rows: list[tuple[Path, dict]]) -> dict:
+    """`updated` is the newest among the pages listed, so a new day alone churns nothing."""
+    updated = max((str(m["updated"]) for _, m in rows if "updated" in m), default="")
+    return {
+        "title": title,
+        "generated": True,
+        "updated": updated or datetime.now(UTC).date().isoformat(),
+    }
+
+
 def _render_index(wiki: Path, by_root: dict) -> str:
     lines = ["# Wiki Index", ""]
     for root in paths.load_roots(wiki):
@@ -48,10 +58,8 @@ def _render_index(wiki: Path, by_root: dict) -> str:
         for page, meta in sorted(by_root.get(root, []), key=lambda pm: str(pm[1].get("title", ""))):
             lines.append(f"- {_link(wiki, page, meta)} — {_cell(meta.get('summary', ''))}")
         lines.append("")
-    return dump(
-        {"title": "Wiki Index", "generated": True, "updated": datetime.now(UTC).date().isoformat()},
-        "\n".join(lines),
-    )
+    listed = [pm for pages in by_root.values() for pm in pages]
+    return dump(_generated_meta("Wiki Index", listed), "\n".join(lines))
 
 
 def _render_table(wiki: Path, name: str, spec: dict, rows: list[tuple[Path, dict]]) -> str:
@@ -77,14 +85,8 @@ def _render_table(wiki: Path, name: str, spec: dict, rows: list[tuple[Path, dict
             ]
             lines.append("| " + " | ".join(cells) + " |")
         lines.append("")
-    return dump(
-        {
-            "title": f"{name} pipeline" if "{" in spec["path"] else name,
-            "generated": True,
-            "updated": datetime.now(UTC).date().isoformat(),
-        },
-        "\n".join(lines),
-    )
+    title = f"{name} pipeline" if "{" in spec["path"] else name
+    return dump(_generated_meta(title, rows), "\n".join(lines))
 
 
 def _targets(wiki: Path, by_root: dict) -> dict[Path, str]:
