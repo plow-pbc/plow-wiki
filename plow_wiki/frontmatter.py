@@ -20,7 +20,7 @@ def parse(text: str) -> tuple[dict, str]:
     try:
         meta = yaml.safe_load(match.group(1))
     except yaml.YAMLError as e:
-        raise FrontmatterError(f"frontmatter is not valid YAML: {e}") from e
+        raise FrontmatterError("frontmatter is not valid YAML") from e  # never the excerpt
     if not isinstance(meta, dict):
         raise FrontmatterError("frontmatter is not a mapping")
     return meta, match.group(2)

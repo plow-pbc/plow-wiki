@@ -48,7 +48,7 @@ def _is_date(value) -> bool:
 def validate_page(meta: dict, schema: Schema, root: str) -> list[str]:
     problems = [f"missing required field: {k}" for k in schema.required if k not in meta]
     if "category" in meta and meta["category"] != root:
-        problems.append(f"category must equal the root ({root}), got {meta['category']!r}")
+        problems.append(f"category must equal the root ({root})")
     sources = meta.get("sources")
     if "sources" in meta and (not isinstance(sources, list) or not sources):
         problems.append("sources must cite at least one source")
@@ -57,16 +57,16 @@ def validate_page(meta: dict, schema: Schema, root: str) -> list[str]:
             continue
         value = meta[name]
         if "const" in rule and value != rule["const"]:
-            problems.append(f"{name} must be {rule['const']}, got {value!r}")
+            problems.append(f"{name} must be {rule['const']}")
         if "enum" in rule and value not in rule["enum"]:
-            problems.append(f"{name} must be one of {rule['enum']}, got {value!r}")
+            problems.append(f"{name} must be one of {rule['enum']}")
         kind = rule.get("type")
         if kind == "date" and not _is_date(value):
-            problems.append(f"{name} must be a date (YYYY-MM-DD), got {value!r}")
+            problems.append(f"{name} must be a date (YYYY-MM-DD)")
         elif kind == "wikilink" and not (isinstance(value, str) and _WIKILINK.match(value)):
-            problems.append(f"{name} must be a [[wikilink]], got {value!r}")
+            problems.append(f"{name} must be a [[wikilink]]")
         elif kind == "string" and not isinstance(value, str):
-            problems.append(f"{name} must be a string, got {value!r}")
+            problems.append(f"{name} must be a string")
         elif kind == "list" and not isinstance(value, list):
-            problems.append(f"{name} must be a list, got {value!r}")
+            problems.append(f"{name} must be a list")
     return problems

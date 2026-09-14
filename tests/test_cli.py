@@ -73,6 +73,35 @@ def test_validate_passes_a_clean_wiki(wiki):
     assert "validated 1 pages" in result.stdout
 
 
+SECRET = "sk-abcdefghijklmnopqrstuvwxyz"  # shaped like an API key a person pasted into a page
+
+LEAK_SCHEMA = """---
+root: people
+required: [title]
+fields:
+  type: {const: person}
+  state: {enum: [idle, met]}
+---
+"""
+
+
+@pytest.mark.parametrize(
+    "page",
+    [
+        pytest.param(_page(type=SECRET), id="const field"),
+        pytest.param(_page(state=SECRET), id="enum field"),
+        pytest.param(f"---\ntitle: [unclosed\nsecret: {SECRET}\n---\n", id="malformed YAML"),
+    ],
+)
+def test_validate_names_the_problem_and_never_echoes_the_value(wiki, page):
+    (wiki / "people" / "_schema.md").write_text(LEAK_SCHEMA)
+    (wiki / "people" / "leak.md").write_text(page)
+    result = run_wiki("validate", "--wiki", str(wiki))
+    assert result.returncode == 1
+    assert "people/leak.md" in result.stdout
+    assert SECRET not in result.stdout + result.stderr
+
+
 def test_index_prints_what_it_wrote(wiki):
     (wiki / "people" / "jane-doe.md").write_text(_page())
     result = run_wiki("index", "--wiki", str(wiki))
