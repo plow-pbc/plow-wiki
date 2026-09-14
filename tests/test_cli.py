@@ -1,6 +1,10 @@
+import json
+import os
 import tomllib
+from pathlib import Path
 
 from tests.conftest import run_wiki
+from tests.test_index import SCHEDULING_SCHEMA, _rel
 
 
 def test_wiki_help_names_every_subcommand():
@@ -81,3 +85,30 @@ def test_snapshot_cli_reports_sha_then_nothing(wiki):
     assert first.returncode == 0 and first.stdout.startswith("snapshot ")
     second = run_wiki("snapshot", "--wiki", str(wiki), "--author", "calendaring")
     assert "nothing to snapshot" in second.stdout
+
+
+def test_nightly_end_to_end(wiki):
+    (wiki / "wiki.toml").write_text(
+        (wiki / "wiki.toml").read_text() + '[roots.scheduling]\nwriter = "calendaring"\n'
+    )
+    (wiki / "scheduling").mkdir()
+    (wiki / "scheduling" / "_schema.md").write_text(SCHEDULING_SCHEMA)
+    d = wiki / "scheduling" / "pipelines" / "fundraising"
+    d.mkdir(parents=True)
+    (d / "acme.md").write_text(_rel("Acme Capital", "scheduling", "2026-09-20"))
+    env = {**os.environ, "WIKI_PATH": str(wiki), "WIKI_AUTHOR": "calendaring"}
+    for cmd in (["validate"], ["index"], ["snapshot"]):
+        result = run_wiki(*cmd, env=env)
+        assert result.returncode == 0, (cmd, result.stdout, result.stderr)
+    assert "Acme Capital" in (wiki / "index.md").read_text()
+    assert "## scheduling" in (wiki / "scheduling" / "pipelines" / "fundraising.md").read_text()
+    hist = run_wiki("history", "scheduling/pipelines/fundraising/acme.md", env=env)
+    assert "calendaring" in hist.stdout
+
+
+def test_latch_manifest_matches_the_cli():
+    manifest = json.loads(Path("latch-plugin.json").read_text())
+    assert manifest["command"] == "wiki"
+    assert manifest["skill"] == "skill.md" and Path("skill.md").is_file()
+    declared = {tuple(a) for a in manifest["argv"]["read"] + manifest["argv"]["write"]}
+    assert declared == {("validate",), ("index",), ("history",), ("init",), ("snapshot",)}
