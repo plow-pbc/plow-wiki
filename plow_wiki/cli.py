@@ -42,8 +42,9 @@ def cmd_init(args: argparse.Namespace) -> int:
             shutil.copy(_data(name), wiki / name)
     (wiki / "_raw").mkdir(exist_ok=True)
     for root in paths.load_roots(wiki):
-        (wiki / root).mkdir(exist_ok=True)
-        schema = wiki / root / "_schema.md"
+        root_dir = paths.contained(wiki, wiki / root)
+        root_dir.mkdir(exist_ok=True)
+        schema = paths.contained(wiki, root_dir / "_schema.md")
         if schema.exists():
             continue
         shipped = _data(f"schemas/{root}/_schema.md")

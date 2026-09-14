@@ -137,6 +137,31 @@ def test_a_page_symlinked_out_of_the_wiki_is_neither_indexed_nor_validated(wiki,
     assert result.returncode == 0 and "validated 1 pages" in result.stdout
 
 
+def test_init_refuses_a_root_symlinked_out_of_the_wiki(tmp_path):
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    target = tmp_path / "wiki"
+    target.mkdir()
+    (target / "wiki.toml").write_text('[roots.people]\nwriter = "shared"\n')
+    (target / "people").symlink_to(outside)
+    result = run_wiki("init", str(target))
+    assert result.returncode == 1
+    assert "outside the wiki" in result.stderr
+    assert not any(outside.iterdir()), "no _schema.md is written through the symlink"
+
+
+def test_index_refuses_a_generated_record_symlinked_out_of_the_wiki(wiki, tmp_path):
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (wiki / ".wiki").symlink_to(outside)
+    (wiki / "people" / "jane-doe.md").write_text(_page())
+    result = run_wiki("index", "--wiki", str(wiki))
+    assert result.returncode == 1
+    assert "outside the wiki" in result.stderr
+    assert not any(outside.iterdir()), "generated.json is not written through the symlink"
+    assert not (wiki / "index.md").exists(), "nothing is written inside the wiki either"
+
+
 @pytest.mark.parametrize("flag_first", [True, False])
 def test_the_wiki_flag_resolves_the_same_wiki_before_or_after_the_subcommand(
     wiki, tmp_path, flag_first

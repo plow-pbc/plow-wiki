@@ -121,13 +121,11 @@ def _targets(wiki: Path, by_root: dict) -> dict[Path, str]:
 
 def build(wiki: Path, force: bool = False) -> list[Path]:
     paths.refuse_git_inside(wiki)
-    record_path = wiki / GENERATED
+    record_path = paths.contained(wiki, wiki / GENERATED)
     recorded = json.loads(record_path.read_text()) if record_path.is_file() else {}
     targets = _targets(wiki, _load_pages(wiki))
-    inside = wiki.resolve()
     for target in targets:
-        if not target.resolve().is_relative_to(inside):
-            sys.exit(f"refusing — {target} is outside the wiki; check table paths in _schema.md")
+        paths.contained(wiki, target)
     if not force:
         for target in targets:
             rel = str(target.relative_to(wiki))

@@ -45,6 +45,14 @@ def load_roots(wiki: Path) -> dict[str, str]:
     }
 
 
+def contained(wiki: Path, path: Path) -> Path:
+    """The resolved path, refusing one a symlink or `..` carries out of the wiki."""
+    resolved = path.resolve()
+    if not resolved.is_relative_to(wiki.resolve()):
+        sys.exit(f"refusing — {os.path.relpath(path, wiki)} is outside the wiki")
+    return resolved
+
+
 def is_generated(path: Path) -> bool:
     try:
         meta, _ = parse(path.read_text())
