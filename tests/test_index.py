@@ -135,6 +135,13 @@ def test_generated_updated_comes_from_the_pages_not_the_clock(sched_wiki):
         assert str(meta["updated"]) == "2026-09-08", target
 
 
+def test_an_empty_updated_never_wins_the_generated_date(sched_wiki):
+    _with_field(sched_wiki / "scheduling" / "pipelines" / "fundraising" / "acme.md", updated=None)
+    build(sched_wiki)
+    meta, _ = parse((sched_wiki / "index.md").read_text())
+    assert str(meta["updated"]) == "2026-09-01"
+
+
 def test_generated_updated_falls_back_to_today_when_no_page_carries_one(wiki):
     build(wiki)
     meta, _ = parse((wiki / "index.md").read_text())

@@ -43,7 +43,7 @@ def _link(wiki: Path, page: Path, meta: dict) -> str:
 
 def _generated_meta(title: str, rows: list[tuple[Path, dict]]) -> dict:
     """`updated` is the newest among the pages listed, so a new day alone churns nothing."""
-    updated = max((str(m["updated"]) for _, m in rows if "updated" in m), default="")
+    updated = max((str(m["updated"]) for _, m in rows if m.get("updated") is not None), default="")
     return {
         "title": title,
         "generated": True,

@@ -73,6 +73,7 @@ def test_history_lists_commits_touching_a_page(wiki):
     snapshot(wiki, author="b")
     lines = history(wiki, "people/jane.md")
     assert sum(ln.endswith((" a", " b")) for ln in lines) == 2
+    assert history(wiki, "people/other.md") == ["no commits touch people/other.md"]
 
 
 def test_history_without_repo_fails_loudly(wiki):
