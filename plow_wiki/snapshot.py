@@ -44,6 +44,7 @@ def _git(wiki: Path, *args: str, check: bool = True, **env) -> subprocess.Comple
         capture_output=True,
         text=True,
         check=check,
+        cwd=wiki,  # git reads pathspecs relative to cwd, not the work tree
         env={**os.environ, **env},
     )
 
@@ -119,7 +120,7 @@ def snapshot(wiki: Path, author: str, push: bool = False) -> str | None:
     if push and not _has_origin(wiki):
         sys.exit(f"--push: {history_dir(wiki)} has no 'origin' remote")
     _ensure_repo(wiki)
-    _git(wiki, "add", "-A")
+    _git(wiki, "add", "-A", "-f")  # -f: an in-wiki .gitignore must not hide pages from history
     has_head = _git(wiki, "rev-parse", "--verify", "HEAD", check=False).returncode == 0
     staged = _git(
         wiki, "diff", "--cached", "--no-color", "--text", *(["HEAD"] if has_head else [])
@@ -157,6 +158,4 @@ def history(wiki: Path, page: str) -> list[str]:
     result = _git(
         wiki, "log", "--format=%h %ad %an", "--date=short", "--stat", "--", page, check=False
     )
-    if result.returncode != 0:
-        return []
-    return [ln for ln in result.stdout.splitlines() if ln.strip()]
+    return [ln for ln in result.stdout.splitlines() if ln.strip()] or [f"no commits touch {page}"]

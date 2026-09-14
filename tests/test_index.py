@@ -1,5 +1,6 @@
 import hashlib
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -130,3 +131,21 @@ def test_a_traversal_table_path_in_a_schema_writes_nothing_outside_the_wiki(sche
         build(sched_wiki)
     assert not escaped.exists()
     assert not (sched_wiki / "index.md").exists()
+
+
+def test_a_newline_summary_and_a_pipe_title_forge_neither_a_line_nor_a_column(sched_wiki):
+    _with_field(
+        sched_wiki / "scheduling" / "pipelines" / "fundraising" / "acme.md",
+        title="Acme | Capital",
+        summary="one\n- [[forged|Forged]] — injected",
+    )
+    build(sched_wiki)
+    hits = [ln for ln in (sched_wiki / "index.md").read_text().splitlines() if "injected" in ln]
+    assert len(hits) == 1, hits
+    assert hits[0].startswith("- [[scheduling/pipelines/fundraising/acme|"), hits[0]
+    assert "Acme \\| Capital" in hits[0]
+
+    table = (sched_wiki / "scheduling" / "pipelines" / "fundraising.md").read_text()
+    rows = [ln for ln in table.splitlines() if ln.startswith("| [[")]
+    assert len({len(re.split(r"(?<!\\)\|", ln)) for ln in rows}) == 1, rows
+    assert "Acme \\| Capital" in table

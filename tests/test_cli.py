@@ -3,6 +3,8 @@ import os
 import tomllib
 from pathlib import Path
 
+import pytest
+
 from tests.conftest import run_wiki
 from tests.test_index import SCHEDULING_SCHEMA, _rel
 
@@ -133,3 +135,25 @@ def test_a_page_symlinked_out_of_the_wiki_is_neither_indexed_nor_validated(wiki,
     assert "Outside Page" not in (wiki / "index.md").read_text()
     result = run_wiki("validate", "--wiki", str(wiki))
     assert result.returncode == 0 and "validated 1 pages" in result.stdout
+
+
+@pytest.mark.parametrize("flag_first", [True, False])
+def test_the_wiki_flag_resolves_the_same_wiki_before_or_after_the_subcommand(
+    wiki, tmp_path, flag_first
+):
+    (wiki / "people" / "jane-doe.md").write_text(_page())
+    argv = ("--wiki", str(wiki), "validate") if flag_first else ("validate", "--wiki", str(wiki))
+    result = run_wiki(*argv, env={**os.environ, "WIKI_PATH": str(tmp_path / "decoy")})
+    assert result.returncode == 0, result.stderr
+    assert "validated 1 pages" in result.stdout
+
+
+def test_validate_names_a_root_that_has_no_schema(wiki):
+    (wiki / "people" / "_schema.md").unlink()
+    result = run_wiki("validate", "--wiki", str(wiki))
+    assert result.returncode == 1
+    assert "people/ has no _schema.md" in result.stderr
+
+
+def test_gitignore_keeps_review_artifacts_and_build_output_out_of_the_sdist():
+    assert {".superpowers/", "dist/"} <= set(Path(".gitignore").read_text().split())

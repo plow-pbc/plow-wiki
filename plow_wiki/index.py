@@ -31,8 +31,14 @@ def _load_pages(wiki: Path) -> dict[str, list[tuple[Path, dict]]]:
     return by_root
 
 
+def _cell(value) -> str:
+    """One index line or table cell: no newline forges a row, no `|` breaks one."""
+    return " ".join(str(value).split()).replace("|", r"\|")
+
+
 def _link(wiki: Path, page: Path, meta: dict) -> str:
-    return f"[[{page.relative_to(wiki).with_suffix('')}|{meta.get('title', page.stem)}]]"
+    target = _cell(page.relative_to(wiki).with_suffix(""))
+    return f"[[{target}|{_cell(meta.get('title', page.stem))}]]"
 
 
 def _render_index(wiki: Path, by_root: dict) -> str:
@@ -40,7 +46,7 @@ def _render_index(wiki: Path, by_root: dict) -> str:
     for root in paths.load_roots(wiki):
         lines.append(f"## {root}")
         for page, meta in sorted(by_root.get(root, []), key=lambda pm: str(pm[1].get("title", ""))):
-            lines.append(f"- {_link(wiki, page, meta)} — {meta.get('summary', '')}")
+            lines.append(f"- {_link(wiki, page, meta)} — {_cell(meta.get('summary', ''))}")
         lines.append("")
     return dump(
         {"title": "Wiki Index", "generated": True, "updated": datetime.now(UTC).date().isoformat()},
@@ -59,15 +65,15 @@ def _render_table(wiki: Path, name: str, spec: dict, rows: list[tuple[Path, dict
     )
     groups: dict[str, list] = defaultdict(list)
     for page, meta in rows:
-        groups[str(meta.get(group_by, "")) if group_by else ""].append((page, meta))
+        groups[_cell(meta.get(group_by, "")) if group_by else ""].append((page, meta))
     lines = [f"# {name}", ""]
     for group, members in groups.items():
         if group:
             lines += [f"## {group}"]
-        lines += ["| " + " | ".join(columns) + " |", "|" + "---|" * len(columns)]
+        lines += ["| " + " | ".join(map(_cell, columns)) + " |", "|" + "---|" * len(columns)]
         for page, meta in members:
             cells = [
-                _link(wiki, page, meta) if c == "title" else str(meta.get(c, "")) for c in columns
+                _link(wiki, page, meta) if c == "title" else _cell(meta.get(c, "")) for c in columns
             ]
             lines.append("| " + " | ".join(cells) + " |")
         lines.append("")

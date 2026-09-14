@@ -15,8 +15,6 @@ from plow_wiki import snapshot as snap
 from plow_wiki.frontmatter import FrontmatterError, parse
 from plow_wiki.schema import load_schema, validate_page
 
-SUBCOMMANDS = ("init", "validate", "index", "snapshot", "history")
-
 BASE_SCHEMA = """---
 root: {root}
 required: [type, title, summary, category, tags, sources, created, updated]
@@ -107,41 +105,35 @@ def cmd_history(args: argparse.Namespace) -> int:
     return 0
 
 
+def _snapshot_args(p: argparse.ArgumentParser) -> None:
+    p.add_argument("--push", action="store_true")
+    p.add_argument("--author")
+
+
+SUBCOMMANDS = {
+    "init": (lambda p: p.add_argument("path"), cmd_init),
+    "validate": (lambda p: None, cmd_validate),
+    "index": (lambda p: p.add_argument("--force", action="store_true"), cmd_index),
+    "snapshot": (_snapshot_args, cmd_snapshot),
+    "history": (lambda p: p.add_argument("path"), cmd_history),
+}
+
+
+def _add_wiki_arg(p: argparse.ArgumentParser, default) -> None:
+    p.add_argument("--wiki", default=default, help="wiki path (default: $WIKI_PATH or ~/Plow/wiki)")
+
+
 def build_parser() -> argparse.ArgumentParser:
-    wiki_arg = argparse.ArgumentParser(add_help=False)
-    wiki_arg.add_argument("--wiki", help="wiki path (default: $WIKI_PATH or ~/Plow/wiki)")
-
-    parser = argparse.ArgumentParser(
-        prog="wiki", description="Curated Plow wiki.", parents=[wiki_arg]
-    )
+    parser = argparse.ArgumentParser(prog="wiki", description="Curated Plow wiki.")
+    _add_wiki_arg(parser, None)
     sub = parser.add_subparsers(dest="command", required=True)
-
-    p = sub.add_parser("init")
-    p.add_argument("path")
-    p.set_defaults(func=cmd_init)
-
-    for name in SUBCOMMANDS:
-        if name == "init":
-            continue
-        p = sub.add_parser(name, parents=[wiki_arg])
-        if name == "validate":
-            p.set_defaults(func=cmd_validate)
-            continue
-        if name == "index":
-            p.add_argument("--force", action="store_true")
-            p.set_defaults(func=cmd_index)
-            continue
-        if name == "snapshot":
-            p.add_argument("--push", action="store_true")
-            p.add_argument("--author")
-            p.set_defaults(func=cmd_snapshot)
-            continue
-        if name == "history":
-            p.add_argument("path")
-            p.set_defaults(func=cmd_history)
-            continue
-        p.set_defaults(func=lambda args: sys.exit(f"wiki {args.command}: not implemented"))
-
+    for name, (configure, func) in SUBCOMMANDS.items():
+        p = sub.add_parser(name)
+        if name != "init":
+            # SUPPRESS: an unused subcommand flag must not overwrite `wiki --wiki /x validate`
+            _add_wiki_arg(p, argparse.SUPPRESS)
+        configure(p)
+        p.set_defaults(func=func)
     return parser
 
 

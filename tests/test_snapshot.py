@@ -65,14 +65,14 @@ def test_history_without_repo_fails_loudly(wiki):
         history(wiki, "people/jane.md")
 
 
-def test_history_on_a_commitless_repo_is_empty(wiki):
+def test_history_on_a_commitless_repo_says_so(wiki):
     (wiki / "people" / "leak.md").write_text(
         "---\ntitle: L\n---\ntoken sk-abcdefghijklmnopqrstuvwxyz\n"
     )
     with pytest.raises(SystemExit):
         snapshot(wiki, author="a")
     assert history_dir(wiki).is_dir()
-    assert history(wiki, "people/leak.md") == []
+    assert history(wiki, "people/leak.md") == ["no commits touch people/leak.md"]
 
 
 def _origin_head(origin: Path) -> str:
@@ -162,3 +162,17 @@ def test_first_push_refuses_a_credential_already_in_history(wiki, tmp_path):
         ).returncode
         != 0
     ), "origin must not receive the credential"
+
+
+def test_snapshot_commits_a_page_an_in_wiki_gitignore_would_hide(wiki):
+    (wiki / "people" / ".gitignore").write_text("*.md\n")
+    (wiki / "people" / "jane.md").write_text("---\ntitle: Jane\n---\n")
+    assert snapshot(wiki, author="a")
+    assert "people/jane.md" in _git(wiki, "ls-tree", "-r", "--name-only", "HEAD")
+
+
+def test_history_finds_a_page_when_run_from_inside_the_wiki(wiki, monkeypatch):
+    (wiki / "people" / "jane.md").write_text("---\ntitle: Jane\n---\n- one\n")
+    snapshot(wiki, author="a")
+    monkeypatch.chdir(wiki / "people")
+    assert sum(ln.endswith(" a") for ln in history(wiki, "people/jane.md")) == 1

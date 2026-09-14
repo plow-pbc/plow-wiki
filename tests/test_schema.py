@@ -56,3 +56,22 @@ def test_each_violation_is_named(schema, change, fragment):
     meta = {k: v for k, v in {**GOOD, **change}.items() if v is not None}
     problems = validate_page(meta, schema, "scheduling")
     assert any(fragment in p for p in problems), problems
+
+
+@pytest.mark.parametrize(
+    "contents, fragment",
+    [
+        (None, "has no _schema.md"),
+        ("no frontmatter here\n", "no frontmatter block"),
+        ("---\n: bad\n---\n", "not valid YAML"),
+        ("---\n- a\n- b\n---\n", "not a mapping"),
+    ],
+)
+def test_load_schema_refuses_a_missing_or_malformed_schema(tmp_path, contents, fragment):
+    root = tmp_path / "scheduling"
+    root.mkdir()
+    if contents is not None:
+        (root / "_schema.md").write_text(contents)
+    with pytest.raises(SystemExit) as e:
+        load_schema(root)
+    assert fragment in str(e.value)
