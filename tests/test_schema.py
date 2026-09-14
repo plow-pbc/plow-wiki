@@ -44,8 +44,8 @@ def test_valid_page_has_no_problems(schema):
     "change, fragment",
     [
         ({"state": None}, "missing required field: state"),
-        ({"state": "flying"}, "state must be one of"),
-        ({"type": "person"}, "type must be relationship"),
+        ({"state": "flying"}, "state is not an allowed value"),
+        ({"type": "person"}, "type does not match its required constant"),
         ({"due": "next week"}, "due must be a date"),
         ({"org": "Example"}, "org must be a [[wikilink]]"),
         ({"category": "people"}, "category must equal the root"),

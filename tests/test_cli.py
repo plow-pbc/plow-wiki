@@ -61,7 +61,7 @@ def test_validate_reports_bad_pages_by_path(wiki):
     (wiki / "people" / "empty.md").write_text(_page(summary=None))
     result = run_wiki("validate", "--wiki", str(wiki))
     assert result.returncode == 1
-    assert "people/bad.md: type must be person" in result.stdout
+    assert "people/bad.md: type does not match its required constant" in result.stdout
     assert "people/empty.md: missing required field: summary" in result.stdout
     assert "jane-doe" not in result.stdout
 
@@ -75,26 +75,25 @@ def test_validate_passes_a_clean_wiki(wiki):
 
 SECRET = "sk-abcdefghijklmnopqrstuvwxyz"  # shaped like an API key a person pasted into a page
 
-LEAK_SCHEMA = """---
-root: people
-required: [title]
-fields:
-  type: {const: person}
-  state: {enum: [idle, met]}
----
-"""
+
+def _leak_schema(const: str = "person", enum: str = "idle") -> str:
+    return f"---\nroot: people\nrequired: [title]\nfields:\n  type: {{const: {const}}}\n  state: {{enum: [{enum}, met]}}\n---\n"
 
 
 @pytest.mark.parametrize(
-    "page",
+    "schema, page",
     [
-        pytest.param(_page(type=SECRET), id="const field"),
-        pytest.param(_page(state=SECRET), id="enum field"),
-        pytest.param(f"---\ntitle: [unclosed\nsecret: {SECRET}\n---\n", id="malformed YAML"),
+        pytest.param(_leak_schema(), _page(type=SECRET), id="page const field"),
+        pytest.param(_leak_schema(), _page(state=SECRET), id="page enum field"),
+        pytest.param(
+            _leak_schema(), f"---\ntitle: [unclosed\nsecret: {SECRET}\n---\n", id="malformed YAML"
+        ),
+        pytest.param(_leak_schema(const=SECRET), _page(type="person"), id="schema const"),
+        pytest.param(_leak_schema(enum=SECRET), _page(state="flying"), id="schema enum"),
     ],
 )
-def test_validate_names_the_problem_and_never_echoes_the_value(wiki, page):
-    (wiki / "people" / "_schema.md").write_text(LEAK_SCHEMA)
+def test_validate_names_the_problem_and_never_echoes_the_value(wiki, schema, page):
+    (wiki / "people" / "_schema.md").write_text(schema)
     (wiki / "people" / "leak.md").write_text(page)
     result = run_wiki("validate", "--wiki", str(wiki))
     assert result.returncode == 1

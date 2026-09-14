@@ -57,9 +57,9 @@ def validate_page(meta: dict, schema: Schema, root: str) -> list[str]:
             continue
         value = meta[name]
         if "const" in rule and value != rule["const"]:
-            problems.append(f"{name} must be {rule['const']}")
+            problems.append(f"{name} does not match its required constant")
         if "enum" in rule and value not in rule["enum"]:
-            problems.append(f"{name} must be one of {rule['enum']}")
+            problems.append(f"{name} is not an allowed value")
         kind = rule.get("type")
         if kind == "date" and not _is_date(value):
             problems.append(f"{name} must be a date (YYYY-MM-DD)")
