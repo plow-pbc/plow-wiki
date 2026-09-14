@@ -73,3 +73,11 @@ def test_index_prints_what_it_wrote(wiki):
     assert result.returncode == 0
     assert "index.md" in result.stdout
     assert "[[people/jane-doe|Jane Doe]]" in (wiki / "index.md").read_text()
+
+
+def test_snapshot_cli_reports_sha_then_nothing(wiki):
+    (wiki / "people" / "jane-doe.md").write_text(_page())
+    first = run_wiki("snapshot", "--wiki", str(wiki), "--author", "calendaring")
+    assert first.returncode == 0 and first.stdout.startswith("snapshot ")
+    second = run_wiki("snapshot", "--wiki", str(wiki), "--author", "calendaring")
+    assert "nothing to snapshot" in second.stdout

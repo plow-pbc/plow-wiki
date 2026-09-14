@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import shutil
 import sys
 from importlib import resources
@@ -10,6 +11,7 @@ from pathlib import Path
 
 from plow_wiki import index as index_mod
 from plow_wiki import paths
+from plow_wiki import snapshot as snap
 from plow_wiki.frontmatter import FrontmatterError, parse
 from plow_wiki.schema import load_schema, validate_page
 
@@ -91,6 +93,20 @@ def cmd_index(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_snapshot(args: argparse.Namespace) -> int:
+    wiki = paths.resolve_wiki(args.wiki)
+    author = args.author or os.environ.get("WIKI_AUTHOR") or os.environ.get("USER", "unknown")
+    sha = snap.snapshot(wiki, author=author, push=args.push)
+    print(f"snapshot {sha}" if sha else "nothing to snapshot")
+    return 0
+
+
+def cmd_history(args: argparse.Namespace) -> int:
+    for line in snap.history(paths.resolve_wiki(args.wiki), args.path):
+        print(line)
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     wiki_arg = argparse.ArgumentParser(add_help=False)
     wiki_arg.add_argument("--wiki", help="wiki path (default: $WIKI_PATH or ~/Plow/wiki)")
@@ -114,6 +130,15 @@ def build_parser() -> argparse.ArgumentParser:
         if name == "index":
             p.add_argument("--force", action="store_true")
             p.set_defaults(func=cmd_index)
+            continue
+        if name == "snapshot":
+            p.add_argument("--push", action="store_true")
+            p.add_argument("--author")
+            p.set_defaults(func=cmd_snapshot)
+            continue
+        if name == "history":
+            p.add_argument("path")
+            p.set_defaults(func=cmd_history)
             continue
         p.set_defaults(func=lambda args: sys.exit(f"wiki {args.command}: not implemented"))
 
