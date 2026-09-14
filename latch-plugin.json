@@ -14,8 +14,8 @@
   },
   "env": { "WIKI_PATH": { "fixed": "${owner_home}/Plow/wiki" } },
   "argv": {
-    "read": [["validate"], ["index"], ["history"]],
-    "write": [["init"], ["snapshot"]]
+    "read": [["validate"], ["history"]],
+    "write": [["init"], ["index"], ["snapshot"]]
   },
   "skill": "skill.md"
 }

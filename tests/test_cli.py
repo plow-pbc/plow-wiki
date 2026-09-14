@@ -141,8 +141,9 @@ def test_latch_manifest_matches_the_cli():
     manifest = json.loads(Path("latch-plugin.json").read_text())
     assert manifest["command"] == "wiki"
     assert manifest["skill"] == "skill.md" and Path("skill.md").is_file()
-    declared = {tuple(a) for a in manifest["argv"]["read"] + manifest["argv"]["write"]}
-    assert declared == {("validate",), ("index",), ("history",), ("init",), ("snapshot",)}
+    argv = {bucket: {tuple(a) for a in cmds} for bucket, cmds in manifest["argv"].items()}
+    assert argv["read"] == {("validate",), ("history",)}  # a command that writes is not a read
+    assert argv["write"] == {("init",), ("index",), ("snapshot",)}
 
 
 def test_init_refuses_a_traversal_root_and_creates_nothing_outside_the_wiki(tmp_path):
