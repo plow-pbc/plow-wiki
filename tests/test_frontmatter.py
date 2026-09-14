@@ -17,6 +17,11 @@ def test_parse_refuses_missing_or_malformed(text):
         parse(text)
 
 
+def test_a_field_written_empty_is_not_a_field():
+    meta, _ = parse("---\ntitle: Jane Doe\nsummary:\nstate: null\n---\n")
+    assert meta == {"title": "Jane Doe"}, "every command reads an empty field as one nobody wrote"
+
+
 def test_dump_round_trips():
     meta, body = parse(PAGE)
     assert parse(dump(meta, body)) == (meta, body)

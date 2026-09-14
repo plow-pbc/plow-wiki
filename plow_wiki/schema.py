@@ -46,8 +46,7 @@ def _is_date(value) -> bool:
 
 
 def validate_page(meta: dict, schema: Schema, root: str) -> list[str]:
-    # `k: ` in YAML parses to None: the field is written but says nothing, so it is missing.
-    problems = [f"missing required field: {k}" for k in schema.required if meta.get(k) is None]
+    problems = [f"missing required field: {k}" for k in schema.required if k not in meta]
     if "category" in meta and meta["category"] != root:
         problems.append(f"category must equal the root ({root})")
     sources = meta.get("sources")

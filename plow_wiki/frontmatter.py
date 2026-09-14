@@ -23,7 +23,9 @@ def parse(text: str) -> tuple[dict, str]:
         raise FrontmatterError("frontmatter is not valid YAML") from e  # never the excerpt
     if not isinstance(meta, dict):
         raise FrontmatterError("frontmatter is not a mapping")
-    return meta, match.group(2)
+    # `field:` with nothing after it parses to None. It says nothing, so no command sees it:
+    # dropping it here is what makes every reader below treat written-empty as absent.
+    return {k: v for k, v in meta.items() if v is not None}, match.group(2)
 
 
 def dump(meta: dict, body: str) -> str:

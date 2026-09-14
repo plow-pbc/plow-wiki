@@ -58,9 +58,11 @@ def _page(**over):
 def test_validate_reports_bad_pages_by_path(wiki):
     (wiki / "people" / "jane-doe.md").write_text(_page())
     (wiki / "people" / "bad.md").write_text(_page(type="org"))
+    (wiki / "people" / "empty.md").write_text(_page(summary=None))
     result = run_wiki("validate", "--wiki", str(wiki))
     assert result.returncode == 1
     assert "people/bad.md: type must be person" in result.stdout
+    assert "people/empty.md: missing required field: summary" in result.stdout
     assert "jane-doe" not in result.stdout
 
 

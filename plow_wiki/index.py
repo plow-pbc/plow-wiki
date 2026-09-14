@@ -33,7 +33,7 @@ def _load_pages(wiki: Path) -> dict[str, list[tuple[Path, dict]]]:
 
 def _cell(value) -> str:
     """One index line or table cell: no newline forges a row, no `|` breaks one."""
-    return "" if value is None else " ".join(str(value).split()).replace("|", r"\|")
+    return " ".join(str(value).split()).replace("|", r"\|")
 
 
 def _link(wiki: Path, page: Path, meta: dict) -> str:
@@ -43,7 +43,7 @@ def _link(wiki: Path, page: Path, meta: dict) -> str:
 
 def _generated_meta(title: str, rows: list[tuple[Path, dict]]) -> dict:
     """`updated` is the newest among the pages listed, so a new day alone churns nothing."""
-    updated = max((str(m["updated"]) for _, m in rows if m.get("updated") is not None), default="")
+    updated = max((str(m["updated"]) for _, m in rows if "updated" in m), default="")
     return {
         "title": title,
         "generated": True,
