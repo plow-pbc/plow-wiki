@@ -8,6 +8,7 @@ import subprocess
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import NamedTuple
 
 from plow_wiki import paths
 
@@ -15,12 +16,17 @@ CREDENTIAL = re.compile(
     r"sk-[A-Za-z0-9_-]{16}|gh[pousr]_[A-Za-z0-9]{20}|github_pat_[A-Za-z0-9_]{20}"
     r"|xox[abpr]-[A-Za-z0-9-]{10}|AKIA[0-9A-Z]{16}|BEGIN [A-Z ]*PRIVATE KEY|eyJ[A-Za-z0-9_-]{20,}\."
 )
-_HUNK = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@")
+_HUNK = re.compile(r"^@{2,} (?:-\d+(?:,\d+)? )+\+(\d+)(?:,\d+)? @")  # @@ and a merge's @@@
 # Top-level paths that are not roots: what a page walk skips, less the two that are
 # per-root or refused outright, plus the wiki's own files.
 HOUSEKEEPING = (
     paths.SKIP_DIRS | paths.SKIP_FILES | {"wiki.toml", ".manifest.json", ".DS_Store", ".trash"}
 ) - {"_schema.md", ".git"}
+
+
+class Snapshot(NamedTuple):
+    action: str  # "snapshot" when it committed, "pushed" when it only sent what was already local
+    sha: str
 
 
 def history_dir(wiki: Path) -> Path:
@@ -87,23 +93,31 @@ def _has_origin(wiki: Path) -> bool:
     )
 
 
-def _scan_before_push(wiki: Path) -> None:
-    """Fail closed: scan everything about to leave the machine, never a silent no-op."""
+def _scan_before_push(wiki: Path) -> bool:
+    """Fail closed: scan everything about to leave the machine. False when origin already has it."""
     ref = _git(wiki, "ls-remote", "--exit-code", "origin", "main", check=False)
     if ref.returncode == 2:  # origin has no main yet: first push, scan all local history
         _scan(_git(wiki, "log", "-p", "--cc", "--no-color", "--text", "HEAD", check=False).stdout)
-        return
-    if ref.returncode != 0:
-        sys.exit("--push: cannot reach origin/main; nothing was committed")
-    if _git(wiki, "fetch", "-q", "origin", "main", check=False).returncode != 0:
+        return True
+    if ref.returncode != 0 or _git(wiki, "fetch", "-q", "origin", "main", check=False).returncode:
         sys.exit("--push: cannot reach origin/main; nothing was committed")
     log = _git(wiki, "log", "-p", "--cc", "--no-color", "--text", "FETCH_HEAD..HEAD", check=False)
     if log.returncode != 0:
         sys.exit("--push: cannot reach origin/main; nothing was committed")
     _scan(log.stdout)
+    return ref.stdout.split()[0] != _git(wiki, "rev-parse", "HEAD").stdout.strip()
 
 
-def snapshot(wiki: Path, author: str, push: bool = False) -> str | None:
+def _push(wiki: Path) -> str:
+    if _git(wiki, "push", "-q", "origin", "HEAD:main", check=False).returncode != 0:
+        sys.exit(
+            "--push: push to origin was rejected; run "
+            f"`git --git-dir {history_dir(wiki)} push origin HEAD:main` by hand to see why"
+        )
+    return _git(wiki, "rev-parse", "--short", "HEAD").stdout.strip()
+
+
+def snapshot(wiki: Path, author: str, push: bool = False) -> Snapshot | None:
     paths.refuse_git_inside(wiki)
     _refuse_undeclared_roots(wiki)
     if push and not _has_origin(wiki):
@@ -115,7 +129,10 @@ def snapshot(wiki: Path, author: str, push: bool = False) -> str | None:
         wiki, "diff", "--cached", "--no-color", "--text", *(["HEAD"] if has_head else [])
     ).stdout
     if not staged.strip():
-        return None
+        # A night whose push failed leaves commits behind origin — send them, never no-op.
+        if not (push and has_head and _scan_before_push(wiki)):
+            return None
+        return Snapshot("pushed", _push(wiki))
     _scan(staged)
     if push:
         _scan_before_push(wiki)
@@ -133,12 +150,9 @@ def snapshot(wiki: Path, author: str, push: bool = False) -> str | None:
         f"wiki snapshot {datetime.now(UTC).date().isoformat()}",
         **identity,
     )
-    if push and _git(wiki, "push", "-q", "origin", "HEAD:main", check=False).returncode != 0:
-        sys.exit(
-            "--push: push to origin was rejected; run "
-            f"`git --git-dir {history_dir(wiki)} push origin HEAD:main` by hand to see why"
-        )
-    return _git(wiki, "rev-parse", "--short", "HEAD").stdout.strip()
+    if push:
+        return Snapshot("snapshot", _push(wiki))
+    return Snapshot("snapshot", _git(wiki, "rev-parse", "--short", "HEAD").stdout.strip())
 
 
 def history(wiki: Path, page: str) -> list[str]:

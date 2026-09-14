@@ -94,8 +94,8 @@ def cmd_index(args: argparse.Namespace) -> int:
 def cmd_snapshot(args: argparse.Namespace) -> int:
     wiki = paths.resolve_wiki(args.wiki)
     author = args.author or os.environ.get("WIKI_AUTHOR") or os.environ.get("USER", "unknown")
-    sha = snap.snapshot(wiki, author=author, push=args.push)
-    print(f"snapshot {sha}" if sha else "nothing to snapshot")
+    done = snap.snapshot(wiki, author=author, push=args.push)
+    print(f"{done.action} {done.sha}" if done else "nothing to snapshot")
     return 0
 
 

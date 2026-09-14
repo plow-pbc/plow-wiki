@@ -100,12 +100,12 @@ def test_push_requires_origin_then_scans_and_syncs_incrementally(wiki, tmp_path)
     _git(wiki, "remote", "add", "origin", str(origin))
 
     # (b) first push to an empty origin lands the local HEAD on origin's main
-    sha = snapshot(wiki, author="a", push=True)
+    sha = snapshot(wiki, author="a", push=True).sha
     assert sha == _origin_head(origin)
 
     # (c) a second push carries the next commit to origin
     (wiki / "people" / "jane3.md").write_text("---\ntitle: Jane3\n---\n")
-    sha2 = snapshot(wiki, author="a", push=True)
+    sha2 = snapshot(wiki, author="a", push=True).sha
     assert sha2 == _origin_head(origin) != sha
 
     # (d) a credential added between pushes is refused; origin does not move
@@ -183,3 +183,30 @@ def test_housekeeping_folders_do_not_count_as_undeclared_roots(wiki, name):
     (wiki / name).mkdir()
     (wiki / "people" / "jane.md").write_text("---\ntitle: Jane\n---\n")
     assert snapshot(wiki, author="a")
+
+
+def _head(wiki: Path) -> str:
+    return _git(wiki, "rev-parse", "--short", "HEAD").strip()
+
+
+def test_push_on_a_clean_tree_sends_the_commits_origin_does_not_have(wiki, tmp_path):
+    origin = tmp_path / "origin.git"
+    subprocess.run(["git", "init", "-q", "--bare", str(origin)], check=True)
+    (wiki / "people" / "jane.md").write_text("---\ntitle: Jane\n---\n")
+    snapshot(wiki, author="a")  # the night origin was unreachable: committed, never pushed
+    _git(wiki, "remote", "add", "origin", str(origin))
+
+    # (a) origin has no main at all — a clean tree still sends every local commit
+    caught_up = snapshot(wiki, author="a", push=True)
+    assert caught_up == ("pushed", _head(wiki))
+    assert _origin_head(origin) == caught_up.sha
+
+    # (b) origin already has it: neither a commit nor a push
+    assert snapshot(wiki, author="a", push=True) is None
+
+    # (c) origin is behind by a commit made while it was unreachable
+    (wiki / "people" / "jane2.md").write_text("---\ntitle: Jane2\n---\n")
+    committed = snapshot(wiki, author="a")
+    assert committed == ("snapshot", _head(wiki))
+    assert snapshot(wiki, author="a", push=True) == ("pushed", committed.sha)
+    assert _origin_head(origin) == committed.sha
