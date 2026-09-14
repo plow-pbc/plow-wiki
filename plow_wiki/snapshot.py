@@ -16,6 +16,17 @@ CREDENTIAL = re.compile(
     r"sk-[A-Za-z0-9_-]{16}|gh[pousr]_[A-Za-z0-9]{20}|github_pat_[A-Za-z0-9_]{20}"
     r"|xox[abpr]-[A-Za-z0-9-]{10}|AKIA[0-9A-Z]{16}|BEGIN [A-Z ]*PRIVATE KEY|eyJ[A-Za-z0-9_-]{20,}\."
 )
+# The scan reads `b/<path>` out of diff headers, so no gitconfig may reshape them.
+_DIFF = (
+    "-c",
+    "diff.noprefix=false",
+    "-c",
+    "diff.mnemonicPrefix=false",
+    "-c",
+    "diff.srcPrefix=a/",
+    "-c",
+    "diff.dstPrefix=b/",
+)
 _HUNK = re.compile(r"^@{2,} (?:-\d+(?:,\d+)? )+\+(\d+)(?:,\d+)? @")  # @@ and a merge's @@@
 # Top-level paths that are not roots: what a page walk skips, less the two that are
 # per-root or refused outright, plus the wiki's own files.
@@ -35,7 +46,7 @@ def history_dir(wiki: Path) -> Path:
 
 def _git(wiki: Path, *args: str, check: bool = True, **env) -> subprocess.CompletedProcess:
     return subprocess.run(
-        ["git", "--git-dir", str(history_dir(wiki)), "--work-tree", str(wiki), *args],
+        ["git", "--git-dir", str(history_dir(wiki)), "--work-tree", str(wiki), *_DIFF, *args],
         capture_output=True,
         text=True,
         check=check,
@@ -64,20 +75,22 @@ def _refuse_undeclared_roots(wiki: Path) -> None:
 def _scan(diff: str) -> None:
     """Refuse every credential-shaped added line, naming file and line, never the value."""
     hits: list[str] = []
-    current, line, previous = None, 0, ""
+    current, line, in_hunk = None, 0, False
     for raw in diff.splitlines():
         hunk = _HUNK.match(raw)
-        if raw.startswith("+++ b/") and previous.startswith("--- "):
-            current = raw[6:]
+        if raw.startswith("diff "):  # a new file section: only its own header may name it
+            current, in_hunk = None, False
         elif hunk:
-            line = int(hunk.group(1))
-        elif raw.startswith("+"):  # every other +line is added content, header or not
+            line, in_hunk = int(hunk.group(1)), True
+        elif not in_hunk:  # a header or log line — never content, never counted
+            if raw.startswith("+++ b/"):
+                current = raw[6:]
+        elif raw.startswith("+"):  # inside a hunk every +line is content, whatever it spells
             if CREDENTIAL.search(raw[1:]):
                 hits.append(f"{current} (line {line})")
             line += 1
         elif raw.startswith(" ") or not raw:
             line += 1
-        previous = raw
     if hits:
         sys.exit(
             "refusing — what looks like an API credential was added in:\n"
@@ -97,11 +110,33 @@ def _scan_before_push(wiki: Path) -> bool:
     """Fail closed: scan everything about to leave the machine. False when origin already has it."""
     ref = _git(wiki, "ls-remote", "--exit-code", "origin", "main", check=False)
     if ref.returncode == 2:  # origin has no main yet: first push, scan all local history
-        _scan(_git(wiki, "log", "-p", "--cc", "--no-color", "--text", "HEAD", check=False).stdout)
+        _scan(
+            _git(
+                wiki,
+                "log",
+                "-p",
+                "--cc",
+                "--no-ext-diff",
+                "--no-color",
+                "--text",
+                "HEAD",
+                check=False,
+            ).stdout
+        )
         return True
     if ref.returncode != 0 or _git(wiki, "fetch", "-q", "origin", "main", check=False).returncode:
         sys.exit("--push: cannot reach origin/main; nothing was committed")
-    log = _git(wiki, "log", "-p", "--cc", "--no-color", "--text", "FETCH_HEAD..HEAD", check=False)
+    log = _git(
+        wiki,
+        "log",
+        "-p",
+        "--cc",
+        "--no-ext-diff",
+        "--no-color",
+        "--text",
+        "FETCH_HEAD..HEAD",
+        check=False,
+    )
     if log.returncode != 0:
         sys.exit("--push: cannot reach origin/main; nothing was committed")
     _scan(log.stdout)
@@ -126,7 +161,13 @@ def snapshot(wiki: Path, author: str, push: bool = False) -> Snapshot | None:
     _git(wiki, "add", "-A", "-f")  # -f: an in-wiki .gitignore must not hide pages from history
     has_head = _git(wiki, "rev-parse", "--verify", "HEAD", check=False).returncode == 0
     staged = _git(
-        wiki, "diff", "--cached", "--no-color", "--text", *(["HEAD"] if has_head else [])
+        wiki,
+        "diff",
+        "--cached",
+        "--no-ext-diff",
+        "--no-color",
+        "--text",
+        *(["HEAD"] if has_head else []),
     ).stdout
     if not staged.strip():
         # A night whose push failed leaves commits behind origin — send them, never no-op.

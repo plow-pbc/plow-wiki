@@ -117,19 +117,40 @@ def test_push_requires_origin_then_scans_and_syncs_incrementally(wiki, tmp_path)
     assert _origin_head(origin) == sha2
 
 
-def test_scan_catches_credentials_on_content_lines_that_start_with_plus(wiki):
-    (wiki / "people" / "leak.md").write_text(
-        "---\ntitle: L\n---\n\n"
-        "++ note: sk-abcdefghijklmnopqrstuvwxyz\n"
-        "+ token: ghp_abcdefghijklmnopqrst\n"
-    )
+@pytest.mark.parametrize(
+    "seed, page, lines",
+    [
+        pytest.param(
+            None,
+            "---\ntitle: L\n---\n\n"
+            "++ note: sk-abcdefghijklmnopqrstuvwxyz\n"
+            "+ token: ghp_abcdefghijklmnopqrst\n",
+            ("line 5", "line 6"),
+            id="a +content line is not a +++ header",
+        ),
+        pytest.param(
+            "---\ntitle: L\n---\n-- em dash line\n",
+            "---\ntitle: L\n---\n++ b/leak sk-abcdefghijklmnopqrstuvwxyz\n",
+            ("line 4",),
+            id="a replaced line cannot forge the --- / +++ header pair",
+        ),
+    ],
+)
+def test_the_scan_reads_added_content_not_diff_punctuation(wiki, seed, page, lines):
+    leak = wiki / "people" / "leak.md"
+    if seed:
+        leak.write_text(seed)
+        snapshot(wiki, author="a")
+    committed = _git(wiki, "rev-list", "--all", "--count").strip() if seed else "0"
+
+    leak.write_text(page)
     with pytest.raises(SystemExit) as e:
         snapshot(wiki, author="a")
     message = str(e.value)
-    assert "people/leak.md (line 5)" in message and "people/leak.md (line 6)" in message
+    assert all(f"people/leak.md ({ln})" in message for ln in lines), message
     assert "sk-abcdef" not in message and "ghp_abcdef" not in message
     assert "nothing was committed" in message
-    assert _git(wiki, "rev-list", "--all", "--count").strip() == "0"
+    assert _git(wiki, "rev-list", "--all", "--count").strip() == committed
 
 
 def test_first_push_refuses_a_credential_already_in_history(wiki, tmp_path):
