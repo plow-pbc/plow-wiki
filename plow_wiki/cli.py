@@ -9,6 +9,8 @@ from importlib import resources
 from pathlib import Path
 
 from plow_wiki import paths
+from plow_wiki.frontmatter import FrontmatterError, parse
+from plow_wiki.schema import load_schema, validate_page
 
 SUBCOMMANDS = ("init", "validate", "index", "snapshot", "history")
 
@@ -51,9 +53,43 @@ def cmd_init(args: argparse.Namespace) -> int:
     return 0
 
 
+def _problems(wiki: Path) -> tuple[list[str], int]:
+    """Every validation problem in the wiki, as `path: problem` lines, plus the page count."""
+    schemas = {
+        root: load_schema(wiki / root) for root in paths.load_roots(wiki) if (wiki / root).is_dir()
+    }
+    lines, count = [], 0
+    for page in paths.iter_pages(wiki):
+        count += 1
+        rel = page.relative_to(wiki)
+        root = rel.parts[0]
+        try:
+            meta, _ = parse(page.read_text())
+        except FrontmatterError as e:
+            lines.append(f"{rel}: {e}")
+            continue
+        lines.extend(f"{rel}: {p}" for p in validate_page(meta, schemas[root], root))
+    return lines, count
+
+
+def cmd_validate(args: argparse.Namespace) -> int:
+    wiki = paths.resolve_wiki(args.wiki)
+    lines, count = _problems(wiki)
+    for line in lines:
+        print(line)
+    if lines:
+        return 1
+    print(f"validated {count} pages")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="wiki", description="Curated Plow wiki.")
-    parser.add_argument("--wiki", help="wiki path (default: $WIKI_PATH or ~/Plow/wiki)")
+    wiki_arg = argparse.ArgumentParser(add_help=False)
+    wiki_arg.add_argument("--wiki", help="wiki path (default: $WIKI_PATH or ~/Plow/wiki)")
+
+    parser = argparse.ArgumentParser(
+        prog="wiki", description="Curated Plow wiki.", parents=[wiki_arg]
+    )
     sub = parser.add_subparsers(dest="command", required=True)
 
     p = sub.add_parser("init")
@@ -63,7 +99,10 @@ def build_parser() -> argparse.ArgumentParser:
     for name in SUBCOMMANDS:
         if name == "init":
             continue
-        p = sub.add_parser(name)
+        p = sub.add_parser(name, parents=[wiki_arg])
+        if name == "validate":
+            p.set_defaults(func=cmd_validate)
+            continue
         p.set_defaults(func=lambda args: sys.exit(f"wiki {args.command}: not implemented"))
 
     return parser
