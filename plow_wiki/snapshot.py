@@ -15,6 +15,7 @@ CREDENTIAL = re.compile(
     r"sk-[A-Za-z0-9_-]{16}|gh[pousr]_[A-Za-z0-9]{20}|github_pat_[A-Za-z0-9_]{20}"
     r"|xox[abpr]-[A-Za-z0-9-]{10}|AKIA[0-9A-Z]{16}|BEGIN [A-Z ]*PRIVATE KEY|eyJ[A-Za-z0-9_-]{20,}\."
 )
+_HUNK = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@")
 HOUSEKEEPING = frozenset(
     {
         "AGENTS.md",
@@ -65,18 +66,28 @@ def _refuse_undeclared_roots(wiki: Path) -> None:
 
 
 def _scan(diff: str) -> None:
-    """Refuse on the first credential-shaped line, naming file and line, never the value."""
-    current = None
-    previous = ""
+    """Refuse every credential-shaped added line, naming file and line, never the value."""
+    hits: list[str] = []
+    current, line, previous = None, 0, ""
     for raw in diff.splitlines():
+        hunk = _HUNK.match(raw)
         if raw.startswith("+++ b/") and previous.startswith("--- "):
             current = raw[6:]
-        elif raw.startswith("+") and not raw.startswith("+++") and CREDENTIAL.search(raw):
-            sys.exit(
-                f"refusing — what looks like an API credential is in {current}; "
-                "inspect it by hand; nothing was committed"
-            )
+        elif hunk:
+            line = int(hunk.group(1))
+        elif raw.startswith("+"):  # every other +line is added content, header or not
+            if CREDENTIAL.search(raw[1:]):
+                hits.append(f"{current} (line {line})")
+            line += 1
+        elif raw.startswith(" ") or not raw:
+            line += 1
         previous = raw
+    if hits:
+        sys.exit(
+            "refusing — what looks like an API credential was added in:\n"
+            + "\n".join(hits)
+            + "\ndelete the line or move the source out of the wiki; nothing was committed"
+        )
 
 
 def _has_origin(wiki: Path) -> bool:

@@ -97,10 +97,14 @@ def _targets(wiki: Path, by_root: dict) -> dict[Path, str]:
             pattern = spec["path"]
             if "{" in pattern:
                 key = pattern[pattern.index("{") + 1 : pattern.index("}")]
-                for value in sorted({str(m.get(key)) for _, m in rows if key in m}):
-                    target = wiki / root / pattern.replace("{" + key + "}", value)
-                    out[target] = _render_table(
-                        wiki, value, spec, [(p, m) for p, m in rows if str(m.get(key)) == value]
+                by_value: dict[str, list] = defaultdict(list)
+                for page, meta in rows:
+                    if key in meta:
+                        source = f"{page.relative_to(wiki)}: {key}"
+                        by_value[paths.safe_segment(str(meta[key]), source)].append((page, meta))
+                for value, members in sorted(by_value.items()):
+                    out[wiki / root / pattern.replace("{" + key + "}", value)] = _render_table(
+                        wiki, value, spec, members
                     )
             else:
                 out[wiki / root / pattern] = _render_table(wiki, Path(pattern).stem, spec, rows)
@@ -112,6 +116,10 @@ def build(wiki: Path, force: bool = False) -> list[Path]:
     record_path = wiki / GENERATED
     recorded = json.loads(record_path.read_text()) if record_path.is_file() else {}
     targets = _targets(wiki, _load_pages(wiki))
+    inside = wiki.resolve()
+    for target in targets:
+        if not target.resolve().is_relative_to(inside):
+            sys.exit(f"refusing — {target} is outside the wiki; check table paths in _schema.md")
     if not force:
         for target in targets:
             rel = str(target.relative_to(wiki))

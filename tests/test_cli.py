@@ -112,3 +112,24 @@ def test_latch_manifest_matches_the_cli():
     assert manifest["skill"] == "skill.md" and Path("skill.md").is_file()
     declared = {tuple(a) for a in manifest["argv"]["read"] + manifest["argv"]["write"]}
     assert declared == {("validate",), ("index",), ("history",), ("init",), ("snapshot",)}
+
+
+def test_init_refuses_a_traversal_root_and_creates_nothing_outside_the_wiki(tmp_path):
+    target = tmp_path / "wiki"
+    target.mkdir()
+    (target / "wiki.toml").write_text('[roots."../escaped"]\nwriter = "shared"\n')
+    result = run_wiki("init", str(target))
+    assert result.returncode == 1
+    assert "not a safe path segment" in result.stderr
+    assert not (tmp_path / "escaped").exists()
+
+
+def test_a_page_symlinked_out_of_the_wiki_is_neither_indexed_nor_validated(wiki, tmp_path):
+    outside = tmp_path / "outside.md"
+    outside.write_text(_page(title="Outside Page"))
+    (wiki / "people" / "outside.md").symlink_to(outside)
+    (wiki / "people" / "jane-doe.md").write_text(_page())
+    assert run_wiki("index", "--wiki", str(wiki)).returncode == 0
+    assert "Outside Page" not in (wiki / "index.md").read_text()
+    result = run_wiki("validate", "--wiki", str(wiki))
+    assert result.returncode == 0 and "validated 1 pages" in result.stdout

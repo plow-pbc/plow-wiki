@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 import sys
 import tomllib
 from collections.abc import Iterator
@@ -13,6 +14,14 @@ from plow_wiki.frontmatter import FrontmatterError, parse
 SKIP_DIRS = frozenset({"_raw", "_archived", "_staging", ".obsidian", ".wiki", ".git"})
 SKIP_FILES = frozenset({"index.md", "log.md", "hot.md", "AGENTS.md", "_schema.md"})
 DEFAULT_WIKI = "~/Plow/wiki"
+_SAFE_SEGMENT = re.compile(r"[A-Za-z0-9._-]+")
+
+
+def safe_segment(value: str, source: str) -> str:
+    """One path component out of untrusted wiki content — a root name, a substituted field."""
+    if value in {".", ".."} or not _SAFE_SEGMENT.fullmatch(value):
+        sys.exit(f"{source} is not a safe path segment")
+    return value
 
 
 def resolve_wiki(arg: str | None) -> Path:
@@ -30,7 +39,10 @@ def load_roots(wiki: Path) -> dict[str, str]:
     if not toml.is_file():
         sys.exit(f"{wiki} is not a wiki: no wiki.toml")
     data = tomllib.loads(toml.read_text())
-    return {name: spec["writer"] for name, spec in data.get("roots", {}).items()}
+    return {
+        safe_segment(name, f"{toml.name}: root {name!r}"): spec["writer"]
+        for name, spec in data.get("roots", {}).items()
+    }
 
 
 def is_generated(path: Path) -> bool:
@@ -43,6 +55,7 @@ def is_generated(path: Path) -> bool:
 
 def iter_pages(wiki: Path) -> Iterator[Path]:
     """Every page a human or agent authored, under declared roots only."""
+    inside = wiki.resolve()
     for root in load_roots(wiki):
         root_dir = wiki / root
         if not root_dir.is_dir():
@@ -50,6 +63,8 @@ def iter_pages(wiki: Path) -> Iterator[Path]:
         for path in sorted(root_dir.rglob("*.md")):
             if any(part in SKIP_DIRS for part in path.relative_to(wiki).parts):
                 continue
-            if path.name in SKIP_FILES or is_generated(path):
+            if path.name in SKIP_FILES or not path.resolve().is_relative_to(inside):
+                continue  # a symlink out of the wiki is not this wiki's page
+            if is_generated(path):
                 continue
             yield path

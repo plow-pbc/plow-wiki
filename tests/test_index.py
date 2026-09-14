@@ -97,3 +97,36 @@ def test_generated_hashes_are_recorded(sched_wiki):
     for path in written:
         rel = str(path.relative_to(sched_wiki))
         assert recorded[rel] == hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _with_field(page: Path, **over):
+    meta, body = parse(page.read_text())
+    meta.update(over)
+    page.write_text(dump(meta, body))
+
+
+def test_a_traversal_field_value_writes_nothing_inside_or_outside_the_wiki(sched_wiki):
+    _with_field(
+        sched_wiki / "scheduling" / "pipelines" / "fundraising" / "acme.md",
+        pipeline="../../../../pwned",
+    )
+    escaped = sched_wiki.parent.parent / "pwned.md"  # where the traversal would land
+    with pytest.raises(SystemExit) as e:
+        build(sched_wiki)
+    assert "scheduling/pipelines/fundraising/acme.md: pipeline is not a safe path segment" in str(
+        e.value
+    )
+    assert "pwned" not in str(e.value), "the refusal names the source, never the page's value"
+    assert not escaped.exists()
+    assert not (sched_wiki / "index.md").exists(), "nothing is written inside the wiki either"
+
+
+def test_a_traversal_table_path_in_a_schema_writes_nothing_outside_the_wiki(sched_wiki):
+    (sched_wiki / "scheduling" / "_schema.md").write_text(
+        SCHEDULING_SCHEMA.replace("pipelines/{pipeline}.md", "../../../pwned.md")
+    )
+    escaped = sched_wiki.parent.parent / "pwned.md"
+    with pytest.raises(SystemExit, match="outside the wiki"):
+        build(sched_wiki)
+    assert not escaped.exists()
+    assert not (sched_wiki / "index.md").exists()
