@@ -1,3 +1,4 @@
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -22,10 +23,17 @@ def _objects(wiki: Path) -> tuple[str, str]:
     return counts["count"], counts["packs"]
 
 
+def _hand_commit(wiki: Path, message: str) -> None:
+    """A commit this tool's scan never saw — what a snapshot whose scan was bypassed leaves."""
+    hand = ("--work-tree", str(wiki), "-c", "user.name=a", "-c", "user.email=a@plow.local")
+    _git(wiki, *hand, "add", "-A", cwd=wiki)
+    _git(wiki, *hand, "commit", "-q", "-m", message, cwd=wiki)
+
+
 def test_first_snapshot_creates_bare_repo_beside_the_wiki(wiki):
     (wiki / "people" / "jane.md").write_text("---\ntitle: Jane\n---\n")
     sha = snapshot(wiki, author="calendaring")
-    assert sha and history_dir(wiki).is_dir()
+    assert sha.sha and history_dir(wiki).is_dir()
     assert not (wiki / ".git").exists()
     assert "calendaring" in _git(wiki, "log", "-1", "--format=%an")
 
@@ -80,6 +88,23 @@ def test_history_on_a_commitless_repo_says_so(wiki):
         snapshot(wiki, author="a")
     assert history_dir(wiki).is_dir()
     assert history(wiki, "people/leak.md") == ["no commits touch people/leak.md"]
+
+
+def test_history_fails_loudly_when_the_history_repo_is_broken(wiki):
+    (wiki / "people" / "jane.md").write_text("---\ntitle: Jane\n---\n")
+    snapshot(wiki, author="a")
+    shutil.rmtree(history_dir(wiki) / "objects")  # the commit is referenced but unreadable
+    with pytest.raises(subprocess.CalledProcessError):
+        history(wiki, "people/jane.md")
+
+
+def test_the_scan_reads_no_bytes_through_a_symlink_out_of_the_wiki(wiki, tmp_path):
+    outside = tmp_path / "secrets.env"
+    outside.write_text("token sk-abcdefghijklmnopqrstuvwxyz\n")
+    (wiki / "people" / "linked.md").symlink_to(outside)
+    assert snapshot(wiki, author="a"), "git stores the link target, so there is nothing to refuse"
+    stored = _git(wiki, "cat-file", "-p", "HEAD:people/linked.md")
+    assert "sk-abcdef" not in stored and stored == str(outside)
 
 
 def _origin_head(origin: Path) -> str:
@@ -166,13 +191,10 @@ def test_first_push_refuses_a_credential_already_in_history(wiki, tmp_path):
     (wiki / "people" / "jane.md").write_text("---\ntitle: Jane\n---\n")
     snapshot(wiki, author="a")
 
-    # A credential committed by hand, the way a snapshot whose scan was bypassed would leave it.
     (wiki / "people" / "leak.md").write_text(
         "---\ntitle: L\n---\n++ sk-abcdefghijklmnopqrstuvwxyz\n"
     )
-    hand = ("--work-tree", str(wiki), "-c", "user.name=a", "-c", "user.email=a@plow.local")
-    _git(wiki, *hand, "add", "-A", cwd=wiki)
-    _git(wiki, *hand, "commit", "-q", "-m", "hand", cwd=wiki)
+    _hand_commit(wiki, "hand")
     (wiki / "people" / "leak.md").unlink()  # gone from the worktree; only history still holds it
 
     origin = tmp_path / "origin.git"
@@ -240,4 +262,14 @@ def test_push_on_a_clean_tree_sends_the_commits_origin_does_not_have(wiki, tmp_p
     committed = snapshot(wiki, author="a")
     assert committed == ("snapshot", _head(wiki))
     assert snapshot(wiki, author="a", push=True) == ("pushed", committed.sha)
+    assert _origin_head(origin) == committed.sha
+
+    # (d) a credential in an outstanding commit is caught before the clean-tree catch-up push
+    leak = wiki / "people" / "leak.md"
+    leak.write_text("---\ntitle: L\n---\n++ sk-abcdefghijklmnopqrstuvwxyz\n")
+    _hand_commit(wiki, "hand")
+    leak.unlink()
+    _hand_commit(wiki, "hand: gone from the worktree, still in history")
+    with pytest.raises(SystemExit, match="credential"):
+        snapshot(wiki, author="a", push=True)
     assert _origin_head(origin) == committed.sha

@@ -14,7 +14,7 @@ from plow_wiki import paths
 
 CREDENTIAL = re.compile(
     r"sk-[A-Za-z0-9_-]{16}|gh[pousr]_[A-Za-z0-9]{20}|github_pat_[A-Za-z0-9_]{20}"
-    r"|xox[abpr]-[A-Za-z0-9-]{10}|AKIA[0-9A-Z]{16}|BEGIN [A-Z ]*PRIVATE KEY|eyJ[A-Za-z0-9_-]{20,}\."
+    r"|xox[abpr]-[A-Za-z0-9-]{10}|(?:AKIA|ASIA)[0-9A-Z]{16}|BEGIN [A-Z ]*PRIVATE KEY|eyJ[A-Za-z0-9_-]{20,}\."
 )
 # The scan reads `b/<path>` out of diff headers, so no gitconfig may reshape them.
 _DIFF = (
@@ -75,7 +75,7 @@ def _refuse_undeclared_roots(wiki: Path) -> None:
 def _refuse(hits: list[str]) -> None:
     if hits:
         sys.exit(
-            "refusing — what looks like an API credential was added in:\n"
+            "refusing — what looks like an API credential is present in:\n"
             + "\n".join(hits)
             + "\ndelete the line or move the source out of the wiki; nothing was committed"
         )
@@ -86,7 +86,9 @@ def _scan_worktree(wiki: Path) -> None:
     hits: list[str] = []
     for path in sorted(wiki.rglob("*")):
         rel = path.relative_to(wiki)
-        if not path.is_file() or ".git" in rel.parts:
+        # git stores a symlink as its target path, never the target's bytes: reading through
+        # one would scan a file the wiki does not own and will never commit.
+        if path.is_symlink() or not path.is_file() or ".git" in rel.parts:
             continue
         for n, line in enumerate(path.read_bytes().decode("utf-8", "replace").splitlines(), 1):
             if CREDENTIAL.search(line):
@@ -207,7 +209,8 @@ def snapshot(wiki: Path, author: str, push: bool = False) -> Snapshot | None:
 def history(wiki: Path, page: str) -> list[str]:
     if not history_dir(wiki).is_dir():
         sys.exit("no history repo yet — run wiki snapshot first")
-    result = _git(
-        wiki, "log", "--format=%h %ad %an", "--date=short", "--stat", "--", page, check=False
-    )
+    # check=True throughout: a repo git cannot read breaks loudly, never reads as "no commits".
+    if _git(wiki, "rev-list", "--all", "--count").stdout.strip() == "0":
+        return [f"no commits touch {page}"]  # the repo exists, nothing is committed in it yet
+    result = _git(wiki, "log", "--format=%h %ad %an", "--date=short", "--stat", "--", page)
     return [ln for ln in result.stdout.splitlines() if ln.strip()] or [f"no commits touch {page}"]
