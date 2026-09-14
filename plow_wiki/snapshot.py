@@ -72,8 +72,30 @@ def _refuse_undeclared_roots(wiki: Path) -> None:
             )
 
 
+def _refuse(hits: list[str]) -> None:
+    if hits:
+        sys.exit(
+            "refusing — what looks like an API credential was added in:\n"
+            + "\n".join(hits)
+            + "\ndelete the line or move the source out of the wiki; nothing was committed"
+        )
+
+
+def _scan_worktree(wiki: Path) -> None:
+    """Every file `git add -A -f` would stage, read off disk — before git writes an object."""
+    hits: list[str] = []
+    for path in sorted(wiki.rglob("*")):
+        rel = path.relative_to(wiki)
+        if not path.is_file() or ".git" in rel.parts:
+            continue
+        for n, line in enumerate(path.read_bytes().decode("utf-8", "replace").splitlines(), 1):
+            if CREDENTIAL.search(line):
+                hits.append(f"{rel} (line {n})")
+    _refuse(hits)
+
+
 def _scan(diff: str) -> None:
-    """Refuse every credential-shaped added line, naming file and line, never the value."""
+    """Refuse every credential-shaped added line of already-committed history, never the value."""
     hits: list[str] = []
     current, line, in_hunk = None, 0, False
     for raw in diff.splitlines():
@@ -91,12 +113,7 @@ def _scan(diff: str) -> None:
             line += 1
         elif raw.startswith(" ") or not raw:
             line += 1
-    if hits:
-        sys.exit(
-            "refusing — what looks like an API credential was added in:\n"
-            + "\n".join(hits)
-            + "\ndelete the line or move the source out of the wiki; nothing was committed"
-        )
+    _refuse(hits)
 
 
 def _has_origin(wiki: Path) -> bool:
@@ -158,23 +175,14 @@ def snapshot(wiki: Path, author: str, push: bool = False) -> Snapshot | None:
     if push and not _has_origin(wiki):
         sys.exit(f"--push: {history_dir(wiki)} has no 'origin' remote")
     _ensure_repo(wiki)
+    _scan_worktree(wiki)  # a refused credential must never reach the object database
     _git(wiki, "add", "-A", "-f")  # -f: an in-wiki .gitignore must not hide pages from history
     has_head = _git(wiki, "rev-parse", "--verify", "HEAD", check=False).returncode == 0
-    staged = _git(
-        wiki,
-        "diff",
-        "--cached",
-        "--no-ext-diff",
-        "--no-color",
-        "--text",
-        *(["HEAD"] if has_head else []),
-    ).stdout
-    if not staged.strip():
+    if not _git(wiki, "status", "--porcelain").stdout.strip():
         # A night whose push failed leaves commits behind origin — send them, never no-op.
         if not (push and has_head and _scan_before_push(wiki)):
             return None
         return Snapshot("pushed", _push(wiki))
-    _scan(staged)
     if push:
         _scan_before_push(wiki)
     identity = {

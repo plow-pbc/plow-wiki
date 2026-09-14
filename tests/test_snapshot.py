@@ -16,6 +16,12 @@ def _git(wiki: Path, *args, cwd: Path | None = None):
     ).stdout
 
 
+def _objects(wiki: Path) -> tuple[str, str]:
+    """(loose objects, packs) in the bare repo — what a refused snapshot must leave untouched."""
+    counts = dict(ln.split(": ") for ln in _git(wiki, "count-objects", "-v").splitlines())
+    return counts["count"], counts["packs"]
+
+
 def test_first_snapshot_creates_bare_repo_beside_the_wiki(wiki):
     (wiki / "people" / "jane.md").write_text("---\ntitle: Jane\n---\n")
     sha = snapshot(wiki, author="calendaring")
@@ -36,8 +42,9 @@ def test_snapshot_refuses_a_credential_and_commits_nothing(wiki):
     )
     with pytest.raises(SystemExit) as e:
         snapshot(wiki, author="a")
-    assert "people/leak.md" in str(e.value) and "sk-abcdef" not in str(e.value)
+    assert "people/leak.md (line 4)" in str(e.value) and "sk-abcdef" not in str(e.value)
     assert _git(wiki, "rev-list", "--all", "--count").strip() == "0"
+    assert _objects(wiki) == ("0", "0"), "the credential never reached the object database"
 
 
 def test_snapshot_refuses_git_inside_and_undeclared_roots(wiki):
@@ -126,22 +133,23 @@ def test_push_requires_origin_then_scans_and_syncs_incrementally(wiki, tmp_path)
             "++ note: sk-abcdefghijklmnopqrstuvwxyz\n"
             "+ token: ghp_abcdefghijklmnopqrst\n",
             ("line 5", "line 6"),
-            id="a +content line is not a +++ header",
+            id="lines that spell diff punctuation",
         ),
         pytest.param(
             "---\ntitle: L\n---\n-- em dash line\n",
             "---\ntitle: L\n---\n++ b/leak sk-abcdefghijklmnopqrstuvwxyz\n",
             ("line 4",),
-            id="a replaced line cannot forge the --- / +++ header pair",
+            id="a rewrite over existing history",
         ),
     ],
 )
-def test_the_scan_reads_added_content_not_diff_punctuation(wiki, seed, page, lines):
+def test_the_scan_reads_page_lines_whatever_they_spell(wiki, seed, page, lines):
     leak = wiki / "people" / "leak.md"
     if seed:
         leak.write_text(seed)
         snapshot(wiki, author="a")
     committed = _git(wiki, "rev-list", "--all", "--count").strip() if seed else "0"
+    objects = _objects(wiki) if seed else ("0", "0")
 
     leak.write_text(page)
     with pytest.raises(SystemExit) as e:
@@ -151,6 +159,7 @@ def test_the_scan_reads_added_content_not_diff_punctuation(wiki, seed, page, lin
     assert "sk-abcdef" not in message and "ghp_abcdef" not in message
     assert "nothing was committed" in message
     assert _git(wiki, "rev-list", "--all", "--count").strip() == committed
+    assert _objects(wiki) == objects, "the credential never reached the object database"
 
 
 def test_first_push_refuses_a_credential_already_in_history(wiki, tmp_path):
@@ -164,6 +173,7 @@ def test_first_push_refuses_a_credential_already_in_history(wiki, tmp_path):
     hand = ("--work-tree", str(wiki), "-c", "user.name=a", "-c", "user.email=a@plow.local")
     _git(wiki, *hand, "add", "-A", cwd=wiki)
     _git(wiki, *hand, "commit", "-q", "-m", "hand", cwd=wiki)
+    (wiki / "people" / "leak.md").unlink()  # gone from the worktree; only history still holds it
 
     origin = tmp_path / "origin.git"
     subprocess.run(["git", "init", "-q", "--bare", str(origin)], check=True)
