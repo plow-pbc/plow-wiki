@@ -179,6 +179,19 @@ def test_init_refuses_a_root_symlinked_out_of_the_wiki(tmp_path):
     assert not any(outside.iterdir()), "no _schema.md is written through the symlink"
 
 
+def test_init_refuses_a_shipped_file_symlinked_out_of_the_wiki(tmp_path):
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    target = tmp_path / "wiki"
+    target.mkdir()
+    (target / "wiki.toml").write_text('[roots.people]\nwriter = "shared"\n')
+    (target / "AGENTS.md").symlink_to(outside / "AGENTS.md")  # dangling: exists() reads False
+    result = run_wiki("init", str(target))
+    assert result.returncode == 1
+    assert "outside the wiki" in result.stderr
+    assert not any(outside.iterdir()), "no template is written through the symlink"
+
+
 def test_index_refuses_a_generated_record_symlinked_out_of_the_wiki(wiki, tmp_path):
     outside = tmp_path / "outside"
     outside.mkdir()

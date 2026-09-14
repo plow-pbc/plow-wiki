@@ -38,8 +38,9 @@ def cmd_init(args: argparse.Namespace) -> int:
     wiki.mkdir(parents=True, exist_ok=True)
     paths.refuse_git_inside(wiki)
     for name in ("AGENTS.md", "wiki.toml"):
-        if not (wiki / name).exists():
-            shutil.copy(_data(name), wiki / name)
+        dest = paths.contained(wiki, wiki / name)
+        if not dest.exists():
+            shutil.copy(_data(name), dest)
     (wiki / "_raw").mkdir(exist_ok=True)
     for root in paths.load_roots(wiki):
         root_dir = paths.contained(wiki, wiki / root)
