@@ -58,6 +58,11 @@ def test_each_violation_is_named(schema, change, fragment):
     assert any(fragment in p for p in problems), problems
 
 
+def test_a_required_field_explicitly_set_to_null_is_missing(schema):
+    problems = validate_page({**GOOD, "state": None}, schema, "scheduling")
+    assert "missing required field: state" in problems
+
+
 @pytest.mark.parametrize(
     "contents, fragment",
     [

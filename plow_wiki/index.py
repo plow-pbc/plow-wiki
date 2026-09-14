@@ -33,7 +33,7 @@ def _load_pages(wiki: Path) -> dict[str, list[tuple[Path, dict]]]:
 
 def _cell(value) -> str:
     """One index line or table cell: no newline forges a row, no `|` breaks one."""
-    return " ".join(str(value).split()).replace("|", r"\|")
+    return "" if value is None else " ".join(str(value).split()).replace("|", r"\|")
 
 
 def _link(wiki: Path, page: Path, meta: dict) -> str:
@@ -124,16 +124,21 @@ def build(wiki: Path, force: bool = False) -> list[Path]:
     record_path = paths.contained(wiki, wiki / GENERATED)
     recorded = json.loads(record_path.read_text()) if record_path.is_file() else {}
     targets = _targets(wiki, _load_pages(wiki))
-    for target in targets:
+    # What this build no longer generates: its pages are gone, so it must not answer for them.
+    stale = [wiki / rel for rel in recorded if wiki / rel not in targets]
+    for target in [*targets, *stale]:
         paths.contained(wiki, target)
     if not force:
-        for target in targets:
+        for target in [*targets, *stale]:
             rel = str(target.relative_to(wiki))
             if target.exists() and rel in recorded and _sha(target) != recorded[rel]:
                 sys.exit(
                     f"{rel} was hand-edited since `wiki index` wrote it; "
                     f"generated files are rebuilt from page frontmatter. Re-run with --force to overwrite."
                 )
+    for target in stale:
+        target.unlink(missing_ok=True)
+        del recorded[str(target.relative_to(wiki))]
     for target, text in targets.items():
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(text)

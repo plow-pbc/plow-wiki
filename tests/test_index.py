@@ -152,6 +152,27 @@ def test_a_newline_summary_and_a_pipe_title_forge_neither_a_line_nor_a_column(sc
     assert "Acme \\| Capital" in table
 
 
+def test_a_generated_table_goes_when_its_last_page_does(sched_wiki):
+    page = sched_wiki / "scheduling" / "pipelines" / "fundraising" / "acme.md"
+    _with_field(page, pipeline="seed")
+    build(sched_wiki)
+    seed = sched_wiki / "scheduling" / "pipelines" / "seed.md"
+    assert seed.is_file()
+
+    page.unlink()
+    build(sched_wiki)
+    assert not seed.exists(), "a table nothing generates any more must not answer for the wiki"
+    assert "seed.md" not in (sched_wiki / ".wiki" / "generated.json").read_text()
+
+
+def test_an_empty_field_renders_an_empty_cell(sched_wiki):
+    _with_field(sched_wiki / "scheduling" / "pipelines" / "fundraising" / "acme.md", next_step=None)
+    build(sched_wiki)
+    table = (sched_wiki / "scheduling" / "pipelines" / "fundraising.md").read_text()
+    row = next(ln for ln in table.splitlines() if "Acme Capital" in ln)
+    assert "None" not in row, row
+
+
 def test_generated_updated_comes_from_the_pages_not_the_clock(sched_wiki):
     _with_field(
         sched_wiki / "scheduling" / "pipelines" / "fundraising" / "beta.md", updated="2026-09-08"
