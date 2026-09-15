@@ -197,12 +197,14 @@ def snapshot(wiki: Path, author: str, push: bool = False) -> Snapshot | None:
         "GIT_COMMITTER_NAME": author,
         "GIT_COMMITTER_EMAIL": f"{author}@plow.local",
     }
+    # The pathspec again: an adopted history can arrive with .env already in its index.
     _git(
         wiki,
         "commit",
         "-q",
         "-m",
         f"wiki snapshot {datetime.now(UTC).date().isoformat()}",
+        *_PAGES,
         **identity,
     )
     if push:
