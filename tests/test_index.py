@@ -11,13 +11,26 @@ from plow_wiki.index import build
 from tests.conftest import SCHEDULING_SCHEMA
 
 
-def test_index_lists_every_page_under_its_root(sched_wiki):
+@pytest.mark.parametrize("tags, suffix", [(["x"], " ( #x)"), (["x", "y"], " ( #x #y)"), (None, "")])
+def test_index_lists_every_page_under_its_root_in_obsidian_wikis_entry_format(
+    sched_wiki, tags, suffix
+):
+    _with_field(sched_wiki / "scheduling" / "pipelines" / "fundraising" / "acme.md", tags=tags)
     build(sched_wiki)
-    text = (sched_wiki / "index.md").read_text()
-    meta, body = parse(text)
+    meta, body = parse((sched_wiki / "index.md").read_text())
     assert meta["generated"] is True
-    assert "## scheduling" in body
-    assert "[[scheduling/pipelines/fundraising/acme|Acme Capital]] — Acme Capital summary" in body
+    lines = body.splitlines()
+    entry = "- [[scheduling/pipelines/fundraising/acme|Acme Capital]] — Acme Capital summary"
+    assert lines.index(entry + suffix) > lines.index("## scheduling")
+
+
+def test_index_md_is_rewritten_over_a_hand_edit(sched_wiki):
+    """obsidian-wiki's skills update index.md after every write; a refusal fails every nightly."""
+    build(sched_wiki)
+    index = sched_wiki / "index.md"
+    index.write_text(index.read_text() + "- [[scheduling/new-page]] — added by wiki-ingest\n")
+    build(sched_wiki)
+    assert "wiki-ingest" not in index.read_text()
 
 
 def test_table_groups_by_stage_and_sorts_by_due(sched_wiki):
@@ -31,7 +44,7 @@ def test_table_groups_by_stage_and_sorts_by_due(sched_wiki):
     assert beta < acme
     assert (
         "| Gamma Partners" not in body
-        and "[[scheduling/pipelines/fundraising/gamma|Gamma Partners]]" in body
+        and r"[[scheduling/pipelines/fundraising/gamma\|Gamma Partners]]" in body
     )
 
 
@@ -76,7 +89,7 @@ def test_a_traversal_field_value_writes_nothing_inside_or_outside_the_wiki(sched
 
 
 def test_a_traversal_table_path_in_a_schema_writes_nothing_outside_the_wiki(sched_wiki):
-    (sched_wiki / "scheduling" / "_schema.md").write_text(
+    (sched_wiki / "_meta" / "schemas" / "scheduling.md").write_text(
         SCHEDULING_SCHEMA.replace("pipelines/{pipeline}.md", "../../../pwned.md")
     )
     escaped = sched_wiki.parent.parent / "pwned.md"
@@ -100,7 +113,8 @@ def test_a_newline_summary_and_a_pipe_title_forge_neither_a_line_nor_a_column(sc
 
     table = (sched_wiki / "scheduling" / "pipelines" / "fundraising.md").read_text()
     rows = [ln for ln in table.splitlines() if ln.startswith("| [[")]
-    assert len({len(re.split(r"(?<!\\)\|", ln)) for ln in rows}) == 1, rows
+    cells = len(["", "title", "state", "next_step", "due", ""])  # a link's own `|` splits no cell
+    assert {len(re.split(r"(?<!\\)\|", ln)) for ln in rows} == {cells}, rows
     assert "Acme \\| Capital" in table
 
 
@@ -140,6 +154,14 @@ def test_an_empty_updated_never_wins_the_generated_date(sched_wiki):
     build(sched_wiki)
     meta, _ = parse((sched_wiki / "index.md").read_text())
     assert str(meta["updated"]) == "2026-09-01"
+
+
+def test_generated_dates_compare_calendar_days_not_offset_strings(sched_wiki):
+    acme = sched_wiki / "scheduling" / "pipelines" / "fundraising" / "acme.md"
+    _with_field(acme, updated="2026-09-20T23:30:00-08:00")
+    build(sched_wiki)
+    meta, _ = parse((sched_wiki / "index.md").read_text())
+    assert str(meta["updated"]) == "2026-09-20"
 
 
 def test_generated_updated_falls_back_to_today_when_no_page_carries_one(wiki):

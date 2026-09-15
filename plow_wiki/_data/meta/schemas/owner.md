@@ -1,8 +1,15 @@
 ---
 root: owner
-required: [type, title, summary, category, tags, sources, created, updated]
+required: [title, summary, category, tags, sources, created, updated]
 fields:
-  type: {const: owner}
+  type: {const: Owner}
+# obsidian-wiki's lint reads every .md under _meta as a page, so this file carries its keys:
+title: owner schema
+category: meta
+tags: [schema]
+sources: []
+created: 2026-09-14
+updated: 2026-09-14
 ---
 # owner/
 
@@ -12,7 +19,7 @@ per topic, e.g. `owner/preferences.md`, `owner/calendars.md`. Example:
 
 ```yaml
 ---
-type: owner
+type: Owner
 title: Meeting preferences
 summary: Defaults the owner has stated for how meetings are booked.
 category: owner

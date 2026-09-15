@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 import sys
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import datetime
 from pathlib import Path
 
 from plow_wiki.frontmatter import FrontmatterError, parse
@@ -20,10 +20,15 @@ class Schema:
     tables: list[dict] = field(default_factory=list)
 
 
-def load_schema(root_dir: Path) -> Schema:
-    path = root_dir / "_schema.md"
+def schema_path(wiki: Path, root: str) -> Path:
+    """Beside obsidian-wiki's own owner metadata, never among the pages a glob of a root finds."""
+    return wiki / "_meta" / "schemas" / f"{root}.md"
+
+
+def load_schema(wiki: Path, root: str) -> Schema:
+    path = schema_path(wiki, root)
     if not path.is_file():
-        sys.exit(f"{root_dir.name}/ has no _schema.md")
+        sys.exit(f"{root} has no schema: {path.relative_to(wiki)} is missing")
     try:
         meta, _ = parse(path.read_text())
     except FrontmatterError as e:
@@ -36,10 +41,9 @@ def load_schema(root_dir: Path) -> Schema:
 
 
 def _is_date(value) -> bool:
-    if isinstance(value, date):
-        return True
+    """An ISO date or datetime: obsidian-wiki's page template writes `created: ...T10:30:00Z`."""
     try:
-        date.fromisoformat(str(value))
+        datetime.fromisoformat(str(value))  # str(): YAML already parsed an unquoted one
         return True
     except ValueError:
         return False
@@ -52,6 +56,8 @@ def validate_page(meta: dict, schema: Schema, root: str) -> list[str]:
     sources = meta.get("sources")
     if "sources" in meta and (not isinstance(sources, list) or not sources):
         problems.append("sources must cite at least one source")
+    if "tags" in meta and not isinstance(meta["tags"], list):  # the index renders each as a #tag
+        problems.append("tags must be a list")
     for name, rule in schema.fields.items():
         if name not in meta:
             continue
@@ -62,7 +68,7 @@ def validate_page(meta: dict, schema: Schema, root: str) -> list[str]:
             problems.append(f"{name} is not an allowed value")
         kind = rule.get("type")
         if kind == "date" and not _is_date(value):
-            problems.append(f"{name} must be a date (YYYY-MM-DD)")
+            problems.append(f"{name} must be an ISO date or datetime")
         elif kind == "wikilink" and not (isinstance(value, str) and _WIKILINK.match(value)):
             problems.append(f"{name} must be a [[wikilink]]")
         elif kind == "string" and not isinstance(value, str):
