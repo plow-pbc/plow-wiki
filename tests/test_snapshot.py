@@ -217,15 +217,38 @@ def test_the_scan_reads_page_lines_whatever_they_spell(wiki, seed, page, lines):
     assert _objects(wiki) == objects, "the credential never reached the object database"
 
 
-def test_first_push_refuses_a_credential_already_in_history(wiki, tmp_path):
+def _committed(wiki: Path, page: Path, text: str) -> None:
+    page.write_text(text)
+    _hand_commit(wiki, "hand")
+
+
+def _merge_resolution(wiki: Path, page: Path, text: str) -> None:
+    """`text` only in a hand-resolved merge, in neither parent: the commit plain `log -p` prints
+    no patch for, and where a conflict fix after a rejected push lands."""
+    ident = ("-c", "user.name=a", "-c", "user.email=a@plow.local")
+
+    def tree(content: str) -> str:
+        page.write_text(content)
+        _git(wiki, "--work-tree", str(wiki), "add", "-A", cwd=wiki)
+        return _git(wiki, "write-tree").strip()
+
+    base = _git(wiki, "rev-parse", "HEAD").strip()
+    _committed(wiki, page, "the version main had\n")
+    side = _git(wiki, *ident, "commit-tree", tree("the other side's\n"), "-p", base, "-m", "side")
+    merge = _git(
+        wiki, *ident, "commit-tree", tree(text), "-p", "HEAD", "-p", side.strip(), "-m", "merge"
+    )
+    _git(wiki, "update-ref", "HEAD", merge.strip())
+
+
+@pytest.mark.parametrize("plant", [_committed, _merge_resolution])
+def test_first_push_refuses_a_credential_already_in_history(wiki, tmp_path, plant):
     (wiki / "people" / "jane.md").write_text("---\ntitle: Jane\n---\n")
     snapshot(wiki, author="a")
 
-    (wiki / "people" / "leak.md").write_text(
-        "---\ntitle: L\n---\n++ sk-abcdefghijklmnopqrstuvwxyz\n"
-    )
-    _hand_commit(wiki, "hand")
-    (wiki / "people" / "leak.md").unlink()  # gone from the worktree; only history still holds it
+    leak = wiki / "people" / "leak.md"
+    plant(wiki, leak, "---\ntitle: L\n---\n++ sk-abcdefghijklmnopqrstuvwxyz\n")
+    leak.unlink()  # gone from the worktree; only history still holds it
 
     origin = tmp_path / "origin.git"
     subprocess.run(["git", "init", "-q", "--bare", str(origin)], check=True)
@@ -322,7 +345,13 @@ def test_push_on_a_clean_tree_sends_the_commits_origin_does_not_have(wiki, tmp_p
     assert snapshot(wiki, author="a", push=True) == ("pushed", committed.sha)
     assert _origin_head(origin) == committed.sha
 
-    # (d) a credential in an outstanding commit is caught before the clean-tree catch-up push
+    # (d) a quiet night that cannot reach origin fails, never reads as "nothing to snapshot"
+    _git(wiki, "remote", "set-url", "origin", str(tmp_path / "unreachable.git"))
+    with pytest.raises(SystemExit, match="cannot reach origin"):
+        snapshot(wiki, author="a", push=True)
+    _git(wiki, "remote", "set-url", "origin", str(origin))
+
+    # (e) a credential in an outstanding commit is caught before the clean-tree catch-up push
     leak = wiki / "people" / "leak.md"
     leak.write_text("---\ntitle: L\n---\n++ sk-abcdefghijklmnopqrstuvwxyz\n")
     _hand_commit(wiki, "hand")

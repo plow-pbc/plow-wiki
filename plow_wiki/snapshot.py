@@ -27,7 +27,7 @@ _DIFF = (
     "-c",
     "diff.dstPrefix=b/",
 )
-_HUNK = re.compile(r"^@{2,} (?:-\d+(?:,\d+)? )+\+(\d+)(?:,\d+)? @")  # @@ and a merge's @@@
+_HUNK = re.compile(r"^(@{2,}) (?:-\d+(?:,\d+)? )+\+(\d+)(?:,\d+)? @")  # @@, and a merge's @@@
 # Top-level folders that are not roots: what a page walk skips, less `.git` (refused outright),
 # plus Obsidian's trash and obsidian-wiki's attachments.
 HOUSEKEEPING = (paths.SKIP_DIRS | {".trash", "attachments"}) - {".git"}
@@ -102,21 +102,20 @@ def _scan_worktree(wiki: Path) -> None:
 def _scan(diff: str) -> None:
     """Refuse every credential-shaped added line of already-committed history, never the value."""
     hits: list[str] = []
-    current, line, in_hunk = None, 0, False
+    current, line, marks = None, 0, 0  # marks: a hunk line's prefix columns, one per parent
     for raw in diff.splitlines():
         hunk = _HUNK.match(raw)
         if raw.startswith("diff "):  # a new file section: only its own header may name it
-            current, in_hunk = None, False
+            current, marks = None, 0
         elif hunk:
-            line, in_hunk = int(hunk.group(1)), True
-        elif not in_hunk:  # a header or log line — never content, never counted
+            line, marks = int(hunk.group(2)), len(hunk.group(1)) - 1
+        elif not marks:  # a header or log line — never content, never counted
             if raw.startswith("+++ b/"):
                 current = raw[6:]
-        elif raw.startswith("+"):  # inside a hunk every +line is content, whatever it spells
-            if CREDENTIAL.search(raw[1:]):
+        # A `-` in any column: gone from the result (a merge's ` -` too). `\`: "No newline" note.
+        elif "-" not in raw[:marks] and not raw.startswith("\\"):
+            if "+" in raw[:marks] and CREDENTIAL.search(raw[marks:]):  # content, whatever it spells
                 hits.append(f"{current} (line {line})")
-            line += 1
-        elif raw.startswith(" ") or not raw:
             line += 1
     _refuse(hits)
 
