@@ -8,7 +8,7 @@ import pytest
 
 from plow_wiki.frontmatter import dump, parse
 from plow_wiki.index import build
-from tests.conftest import SCHEDULING_SCHEMA
+from tests.conftest import SCHEDULING_SCHEMA, run_wiki
 
 
 @pytest.mark.parametrize("tags, suffix", [(["x"], " ( #x)"), (["x", "y"], " ( #x #y)"), (None, "")])
@@ -192,15 +192,37 @@ def test_index_writes_recall_chunks_one_per_page_and_one_per_fact(wiki):
         )
     )
     (wiki / "people" / "broken.md").write_text("no frontmatter here\n- a bullet\n")
+    # A nested root (str's layout, #19) with its own, non-shared writer: its chunks must carry
+    # that writer, not "str" — the top-level folder is not itself a declared root at all.
+    (wiki / "wiki.toml").write_text(
+        (wiki / "wiki.toml").read_text() + '[roots."str/operations"]\nwriter = "str"\n'
+    )
+    assert run_wiki("init", str(wiki)).returncode == 0
+    (wiki / "str" / "operations" / "trash.md").write_text(
+        dump(
+            {
+                "title": "Trash",
+                "summary": "Bins go out Monday.",
+                "category": "operations",
+                "tags": ["operations"],
+                "sources": ["obs:1"],
+                "created": "2026-09-01",
+                "updated": "2026-09-01",
+            },
+            "- Bins go out Monday.\n",
+        )
+    )
     build(wiki)
     path = wiki / ".wiki" / "chunks.json"
     first = path.read_bytes()
     payload = json.loads(first)
     assert payload["updated"] == "2026-09-13"
     chunks = payload["chunks"]
-    # The writer is the root's, from wiki.toml: recall keeps an agent-owned root to its agent.
+    # The writer is the declared root's, from wiki.toml: recall keeps an agent-owned root to
+    # its agent, nested roots included.
     assert {(c["page"], c["title"], c["writer"]) for c in chunks} == {
-        ("people/jane-doe", "Jane Doe", "shared")
+        ("people/jane-doe", "Jane Doe", "shared"),
+        ("str/operations/trash", "Trash", "str"),
     }
     assert [c["text"] for c in chunks] == [
         "Partner at Example | Ventures. #person #investor",  # authored text, not a table cell
@@ -208,8 +230,148 @@ def test_index_writes_recall_chunks_one_per_page_and_one_per_fact(wiki):
         "Mornings only in winter. ^[inferred]",
         "Assistant books her travel.",
         "Reads every deck before a first meeting.",
+        "Bins go out Monday. #operations",
+        "Bins go out Monday.",
     ]
     recorded = json.loads((wiki / ".wiki" / "generated.json").read_text())
     assert recorded[".wiki/chunks.json"] == hashlib.sha256(first).hexdigest()
     build(wiki)
     assert path.read_bytes() == first, "an unchanged wiki rewrites the same bytes"
+
+
+OPERATIONS_SCHEMA = """---
+required: [title]
+tables:
+  - into: property
+    section: "## Operations"
+    match: {type: Operation}
+    sort_by: title
+    columns: [title, summary]
+---
+"""
+HUB = "---\ntitle: Casa\n---\n# Casa\n\nIntro prose.\n\n## Operations\n"
+TABLE = (
+    "\n| title | summary |\n|---|---|\n"
+    "| [[str/operations/casa-trash\\|Trash]] | Bins go out Monday |\n"
+    "| [[str/operations/casa-wifi\\|Wifi]] | Router in the hall |\n\n"
+)
+
+
+@pytest.fixture
+def hub_wiki(wiki: Path) -> Path:
+    """str's layout: hand-written hubs, and operations pages that link one each."""
+    (wiki / "wiki.toml").write_text(
+        (wiki / "wiki.toml").read_text()
+        + '[roots."str/properties"]\nwriter = "str"\n[roots."str/operations"]\nwriter = "str"\n'
+    )
+    assert run_wiki("init", str(wiki)).returncode == 0
+    (wiki / "_meta" / "schemas" / "str" / "operations.md").write_text(OPERATIONS_SCHEMA)
+    (wiki / "str" / "properties" / "casa.md").write_text(HUB)
+    for slug, title, summary, link in (
+        ("casa-wifi", "Wifi", "Router in the hall", "[[str/properties/casa]]"),
+        ("casa-trash", "Trash", "Bins go out Monday", "[[str/properties/casa|Casa]]"),
+    ):
+        meta = {"type": "Operation", "title": title, "summary": summary, "property": link}
+        (wiki / "str" / "operations" / f"{slug}.md").write_text(dump(meta, "\n- A fact.\n"))
+    return wiki
+
+
+@pytest.mark.parametrize(
+    "page, expected",
+    [
+        pytest.param(
+            HUB + "- a list build-hubs left\n\n## Notes\nKeep this.\n",
+            HUB + TABLE + "## Notes\nKeep this.\n",
+            id="mid-page",
+        ),
+        pytest.param(
+            HUB + "- a list build-hubs left", HUB + TABLE, id="last, saved without a final newline"
+        ),
+        pytest.param(HUB.removesuffix("\n"), HUB + TABLE, id="a bare heading on the last line"),
+    ],
+)
+def test_a_section_table_lists_its_linking_pages_and_leaves_every_other_byte(
+    hub_wiki, page, expected
+):
+    hub = hub_wiki / "str" / "properties" / "casa.md"
+    hub.write_text(page)
+    build(hub_wiki)
+    assert hub.read_text() == expected
+
+    edited = expected.replace("Intro prose.", "Intro prose, edited by the owner.")
+    hub.write_text(edited)
+    build(hub_wiki)
+    first = hub.read_bytes()
+    assert first.decode() == edited, "prose around the table is the owner's, not the index's"
+    build(hub_wiki)
+    assert hub.read_bytes() == first, "a second run changes nothing"
+
+
+def _files(wiki: Path) -> dict[str, bytes]:
+    return {str(p.relative_to(wiki)): p.read_bytes() for p in wiki.rglob("*") if p.is_file()}
+
+
+def _hand_edit_the_table(wiki: Path) -> None:
+    build(wiki)
+    hub = wiki / "str" / "properties" / "casa.md"
+    hub.write_text(hub.read_text().replace("Router in the hall", "Router moved"))
+
+
+def test_a_link_planted_beside_a_hub_cannot_take_its_write(hub_wiki, tmp_path):
+    outside = tmp_path / "outside.txt"
+    outside.write_text("not the wiki's\n")
+    hub = hub_wiki / "str" / "properties" / "casa.md"
+    (hub.parent / ".casa.md.tmp").symlink_to(outside)
+    build(hub_wiki)
+    assert outside.read_text() == "not the wiki's\n"
+    assert not hub.is_symlink() and TABLE in hub.read_text()
+
+
+def test_a_write_that_fails_leaves_the_hand_written_hub_whole(hub_wiki, monkeypatch):
+    hub = hub_wiki / "str" / "properties" / "casa.md"
+    before = hub.read_text()
+
+    def interrupted(src, dst):
+        raise OSError("disk full")
+
+    monkeypatch.setattr("plow_wiki.index.os.replace", interrupted)
+    with pytest.raises(OSError):
+        build(hub_wiki)
+    assert hub.read_text() == before
+
+
+@pytest.mark.parametrize(
+    "breakage, refusal",
+    [
+        pytest.param(
+            lambda w: (w / "str" / "properties" / "casa.md").write_text("---\ntitle: Casa\n---\n"),
+            "str/properties/casa.md has no '## Operations' heading",
+            id="missing heading",
+        ),
+        pytest.param(
+            lambda w: _with_field(w / "str/operations/casa-wifi.md", property="[[str/nowhere]]"),
+            "str/operations/casa-wifi.md: property links a page that does not exist",
+            id="missing page",
+        ),
+        pytest.param(
+            lambda w: _with_field(w / "str/operations/casa-wifi.md", property="[[../../../out]]"),
+            "str/operations/casa-wifi.md: property is outside the wiki",
+            id="a link out of the wiki",
+        ),
+        pytest.param(
+            lambda w: _with_field(w / "str/operations/casa-wifi.md", property="Casa"),
+            "str/operations/casa-wifi.md: property is not a [[wikilink]]",
+            id="not a wikilink",
+        ),
+        pytest.param(
+            _hand_edit_the_table, "casa.md### Operations was hand-edited", id="hand-edited table"
+        ),
+    ],
+)
+def test_a_section_table_refuses_and_writes_nothing(hub_wiki, breakage, refusal):
+    breakage(hub_wiki)
+    before = _files(hub_wiki)
+    with pytest.raises(SystemExit) as e:
+        build(hub_wiki)
+    assert refusal in str(e.value)
+    assert _files(hub_wiki) == before, "nothing is written anywhere"

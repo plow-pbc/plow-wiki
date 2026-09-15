@@ -10,7 +10,7 @@ from pathlib import Path
 
 from plow_wiki.frontmatter import FrontmatterError, parse
 
-_WIKILINK = re.compile(r"^\[\[[^\]]+\]\]$")
+WIKILINK = re.compile(r"\[\[([^\]|]+)(?:\|[^\]]*)?\]\]")  # [[path]] or [[path|alias]]; fullmatch
 
 
 @dataclass
@@ -51,8 +51,9 @@ def _is_date(value) -> bool:
 
 def validate_page(meta: dict, schema: Schema, root: str) -> list[str]:
     problems = [f"missing required field: {k}" for k in schema.required if k not in meta]
-    if "category" in meta and meta["category"] != root:
-        problems.append(f"category must equal the root ({root})")
+    category = root.rsplit("/", 1)[-1]  # str/operations holds obsidian-wiki's `operations`
+    if "category" in meta and meta["category"] != category:
+        problems.append(f"category must equal the root's last segment ({category})")
     sources = meta.get("sources")
     if "sources" in meta and (not isinstance(sources, list) or not sources):
         problems.append("sources must cite at least one source")
@@ -69,7 +70,7 @@ def validate_page(meta: dict, schema: Schema, root: str) -> list[str]:
         kind = rule.get("type")
         if kind == "date" and not _is_date(value):
             problems.append(f"{name} must be an ISO date or datetime")
-        elif kind == "wikilink" and not (isinstance(value, str) and _WIKILINK.match(value)):
+        elif kind == "wikilink" and not (isinstance(value, str) and WIKILINK.fullmatch(value)):
             problems.append(f"{name} must be a [[wikilink]]")
         elif kind == "string" and not isinstance(value, str):
             problems.append(f"{name} must be a string")

@@ -10,8 +10,8 @@ updated: 2026-09-14
 # Wiki — curation policy
 
 This folder is a wiki of durable facts, opened in Obsidian by its owner and
-written by agents and humans alike. `wiki.toml` lists its top-level roots and
-who writes each; `_meta/schemas/<root>.md` says what a page in that root must carry.
+written by agents and humans alike. `wiki.toml` lists its roots and who
+writes each; `_meta/schemas/<root>.md` says what a page in that root must carry.
 `wiki index` rebuilds `index.md` and every page marked `generated: true` from
 page frontmatter; do not edit a generated page by hand.
 

@@ -59,7 +59,7 @@ def cmd_init(args: argparse.Namespace) -> int:
     (wiki / "_raw").mkdir(exist_ok=True)
     today = datetime.now(UTC).date().isoformat()
     for root in paths.load_roots(wiki):
-        paths.contained(wiki, wiki / root).mkdir(exist_ok=True)
+        paths.contained(wiki, wiki / root).mkdir(parents=True, exist_ok=True)
         shipped = _data(f"meta/schemas/{root}.md")
         text = (
             shipped.read_text() if shipped.is_file() else BASE_SCHEMA.format(root=root, today=today)
@@ -75,10 +75,9 @@ def _problems(wiki: Path) -> tuple[list[str], int]:
         root: load_schema(wiki, root) for root in paths.load_roots(wiki) if (wiki / root).is_dir()
     }
     lines, count = [], 0
-    for page in paths.iter_pages(wiki):
+    for root, page in paths.iter_pages(wiki):
         count += 1
         rel = page.relative_to(wiki)
-        root = rel.parts[0]
         try:
             meta, _ = parse(page.read_text())
         except FrontmatterError as e:

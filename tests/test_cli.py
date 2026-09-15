@@ -156,14 +156,52 @@ def test_latch_manifest_matches_the_cli():
     assert argv["write"] == {("init",), ("index",), ("snapshot",)}
 
 
-def test_init_refuses_a_traversal_root_and_creates_nothing_outside_the_wiki(tmp_path):
+@pytest.mark.parametrize(
+    "roots, refusal",
+    [
+        pytest.param('[roots."../escaped"]', "not a safe path segment", id="traversal"),
+        pytest.param(
+            '[roots."str/../../escaped"]', "not a safe path segment", id="nested traversal"
+        ),
+        pytest.param(
+            '[roots."str/operations"]\nwriter = "str"\n[roots.str]',
+            "roots must not overlap",
+            id="a root inside another",
+        ),
+    ],
+)
+def test_init_refuses_a_bad_root_and_creates_nothing_outside_the_wiki(tmp_path, roots, refusal):
     target = tmp_path / "wiki"
     target.mkdir()
-    (target / "wiki.toml").write_text('[roots."../escaped"]\nwriter = "shared"\n')
+    (target / "wiki.toml").write_text(f'{roots}\nwriter = "shared"\n')
     result = run_wiki("init", str(target))
     assert result.returncode == 1
-    assert "not a safe path segment" in result.stderr
+    assert refusal in result.stderr
     assert not (tmp_path / "escaped").exists()
+    assert not (target / "str").exists()
+
+
+def test_a_nested_root_validates_indexes_and_snapshots(wiki):
+    (wiki / "wiki.toml").write_text(
+        (wiki / "wiki.toml").read_text() + '[roots."str/operations"]\nwriter = "str"\n'
+    )
+    assert run_wiki("init", str(wiki)).returncode == 0
+    assert (wiki / "_meta" / "schemas" / "str" / "operations.md").is_file()
+    ops = wiki / "str" / "operations"
+    (ops / "casa-wifi.md").write_text(_page(type=None, title="Casa wifi", category="operations"))
+    (ops / "bad.md").write_text(_page(type=None, category="str/operations"))
+    result = run_wiki("validate", "--wiki", str(wiki))
+    assert result.stdout.splitlines() == [
+        "str/operations/bad.md: category must equal the root's last segment (operations)"
+    ]
+    (ops / "bad.md").unlink()
+    for cmd in (["validate"], ["index"], ["snapshot", "--author", "str"]):
+        result = run_wiki("--wiki", str(wiki), *cmd)
+        assert result.returncode == 0, (cmd, result.stdout, result.stderr)
+    index = (wiki / "index.md").read_text()
+    assert index.index("- [[str/operations/casa-wifi|Casa wifi]]") > index.index(
+        "## str/operations"
+    )
 
 
 def test_a_page_symlinked_out_of_the_wiki_is_neither_indexed_nor_validated(wiki, tmp_path):
