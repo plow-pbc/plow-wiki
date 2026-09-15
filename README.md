@@ -20,7 +20,7 @@ Open `~/Plow/wiki` in Obsidian. Agents reach it through Latch.
 | `wiki init <path>` | Creates the wiki: `AGENTS.md`, `wiki.toml`, `_raw/`, one folder per root, each root's schema at `_meta/schemas/<root>.md`, and the `.env` obsidian-wiki's skills find the wiki by |
 | `wiki validate` | Checks every page's frontmatter against its root's schema |
 | `wiki index` | Regenerates `index.md` and each root's declared tables |
-| `wiki snapshot` | Commits the wiki, less `.env`, into `<parent>/.wiki-history.git` after a credential scan |
+| `wiki snapshot` | Commits the wiki, less `.env`, into `<wiki>.git` beside it (`~/Plow/wiki.git`) after a credential scan |
 | `wiki history <path>` | Commits touching a page |
 
 `WIKI_PATH` or `--wiki` names the wiki; default `~/Plow/wiki`.

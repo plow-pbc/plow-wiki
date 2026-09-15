@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 from plow_wiki.snapshot import history, history_dir, snapshot
+from tests.conftest import run_wiki
 
 
 def _git(wiki: Path, *args, cwd: Path | None = None):
@@ -36,6 +37,18 @@ def test_first_snapshot_creates_bare_repo_beside_the_wiki(wiki):
     assert sha.sha and history_dir(wiki).is_dir()
     assert not (wiki / ".git").exists()
     assert "calendaring" in _git(wiki, "log", "-1", "--format=%an")
+
+
+def test_a_scratch_wiki_beside_the_real_one_never_snapshots_into_its_history(wiki, tmp_path):
+    scratch = tmp_path / "wiki-e2e"
+    assert run_wiki("init", str(scratch)).returncode == 0
+    (scratch / "people" / "fixture.md").write_text("---\ntitle: Fixture\n---\n")
+    snapshot(scratch, author="e2e")
+    (wiki / "people" / "jane.md").write_text("---\ntitle: Jane\n---\n")
+    snapshot(wiki, author="a")
+    assert history_dir(wiki) == tmp_path / "wiki.git"
+    touched = _git(wiki, "log", "--all", "--name-only", "--format=").split()
+    assert "people/jane.md" in touched and "people/fixture.md" not in touched, touched
 
 
 def test_second_identical_snapshot_is_a_noop(wiki):

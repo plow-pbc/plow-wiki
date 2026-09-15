@@ -42,7 +42,8 @@ class Snapshot(NamedTuple):
 
 
 def history_dir(wiki: Path) -> Path:
-    return wiki.parent / ".wiki-history.git"
+    """Named for the wiki, so a scratch copy beside it (`wiki-e2e`) never shares its history."""
+    return wiki.parent / f"{wiki.name}.git"
 
 
 def _git(wiki: Path, *args: str, check: bool = True, **env) -> subprocess.CompletedProcess:
