@@ -56,6 +56,8 @@ def validate_page(meta: dict, schema: Schema, root: str) -> list[str]:
     sources = meta.get("sources")
     if "sources" in meta and (not isinstance(sources, list) or not sources):
         problems.append("sources must cite at least one source")
+    if "tags" in meta and not isinstance(meta["tags"], list):  # the index renders each as a #tag
+        problems.append("tags must be a list")
     for name, rule in schema.fields.items():
         if name not in meta:
             continue

@@ -60,6 +60,7 @@ def test_valid_page_has_no_problems(schema, due):
         ({"org": "Example"}, "org must be a [[wikilink]]"),
         ({"category": "people"}, "category must equal the root"),
         ({"sources": []}, "sources must cite at least one"),
+        ({"tags": "fundraising"}, "tags must be a list"),
     ],
 )
 def test_each_violation_is_named(schema, change, fragment):
