@@ -165,7 +165,8 @@ def test_index_writes_recall_chunks_one_per_page_and_one_per_fact(wiki):
             "  - Mornings only in winter. ^[inferred]\n"
             "\n"
             "Some prose that is not a fact bullet.\n"
-            "* Assistant books her travel.\n",
+            "* Assistant books her travel.\n"
+            "+ Reads every deck before a first meeting.\n",
         )
     )
     (wiki / "people" / "broken.md").write_text("no frontmatter here\n- a bullet\n")
@@ -184,6 +185,7 @@ def test_index_writes_recall_chunks_one_per_page_and_one_per_fact(wiki):
         "Prefers 30-minute video calls before noon Eastern.",
         "Mornings only in winter. ^[inferred]",
         "Assistant books her travel.",
+        "Reads every deck before a first meeting.",
     ]
     recorded = json.loads((wiki / ".wiki" / "generated.json").read_text())
     assert recorded[".wiki/chunks.json"] == hashlib.sha256(first).hexdigest()

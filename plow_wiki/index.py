@@ -16,7 +16,7 @@ from plow_wiki.schema import load_schema
 
 GENERATED = ".wiki/generated.json"
 CHUNKS = ".wiki/chunks.json"
-_FACT = re.compile(r"^\s*[-*]\s+(\S.*?)\s*$")
+_FACT = re.compile(r"^\s*[-*+]\s+(\S.*?)\s*$")
 
 
 def _sha(path: Path) -> str:
