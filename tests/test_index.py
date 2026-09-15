@@ -156,6 +156,14 @@ def test_an_empty_updated_never_wins_the_generated_date(sched_wiki):
     assert str(meta["updated"]) == "2026-09-01"
 
 
+def test_generated_dates_compare_calendar_days_not_offset_strings(sched_wiki):
+    acme = sched_wiki / "scheduling" / "pipelines" / "fundraising" / "acme.md"
+    _with_field(acme, updated="2026-09-20T23:30:00-08:00")
+    build(sched_wiki)
+    meta, _ = parse((sched_wiki / "index.md").read_text())
+    assert str(meta["updated"]) == "2026-09-20"
+
+
 def test_generated_updated_falls_back_to_today_when_no_page_carries_one(wiki):
     build(wiki)
     meta, _ = parse((wiki / "index.md").read_text())

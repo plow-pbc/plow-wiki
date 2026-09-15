@@ -9,22 +9,13 @@ import tomllib
 from collections.abc import Iterator
 from pathlib import Path
 
+from obsidian_wiki.graph_analysis import SKIP_DIRS as OBSIDIAN_SKIP_DIRS
+
 from plow_wiki.frontmatter import FrontmatterError, parse
 
-# obsidian-wiki's staging, archive and metadata folders (its graph_analysis.SKIP_DIRS), and ours.
-SKIP_DIRS = frozenset(
-    {
-        "_raw",
-        "_archived",
-        "_staging",
-        "_archives",
-        "_meta",
-        "_readouts",
-        ".obsidian",
-        ".wiki",
-        ".git",
-    }
-)
+# obsidian-wiki's own page selection, which it requires every module walking the vault to share,
+# plus plow-wiki's generated-file record and git.
+SKIP_DIRS = OBSIDIAN_SKIP_DIRS | {".wiki", ".git"}
 SKIP_FILES = frozenset({"index.md", "log.md", "hot.md", "AGENTS.md"})
 DEFAULT_WIKI = "~/Plow/wiki"
 _SAFE_SEGMENT = re.compile(r"[A-Za-z0-9._-]+")

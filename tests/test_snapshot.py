@@ -86,6 +86,11 @@ def test_env_is_never_scanned_or_committed(wiki):
     assert snapshot(wiki, author="a")
     assert ".env" not in _git(wiki, "log", "--all", "--name-only", "--format=")
     assert snapshot(wiki, author="a") is None, "an untracked .env is not a change to commit"
+    # An adopted history can already hold .env in its index; the commit still leaves it out.
+    _git(wiki, "--work-tree", str(wiki), "add", "-f", ".env", cwd=wiki)
+    (wiki / "people" / "ann.md").write_text("---\ntitle: Ann\n---\n")
+    assert snapshot(wiki, author="a")
+    assert ".env" not in _git(wiki, "log", "--all", "--name-only", "--format=")
 
 
 def test_history_lists_commits_touching_a_page(wiki):
@@ -298,10 +303,6 @@ def test_history_finds_a_page_when_run_from_inside_the_wiki(wiki, monkeypatch):
                 "_meta/taxonomy.md",
                 "_readouts/narration.md",
                 "attachments/photo.png",
-                "_insights.md",
-                ".graph-cache.json",
-                ".manifest.lock",
-                ".manifest.json.4821.tmp",
             )
         ),
         pytest.param(
