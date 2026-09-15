@@ -4,6 +4,13 @@ required: [title, summary, category, tags, sources, created, updated]
 fields:
   type: {const: Organization}
   website: {type: string}
+# obsidian-wiki's lint reads every .md under _meta as a page, so this file carries its keys:
+title: orgs schema
+category: meta
+tags: [schema]
+sources: []
+created: 2026-09-14
+updated: 2026-09-14
 ---
 # orgs/
 

@@ -1,3 +1,12 @@
+---
+# obsidian-wiki's lint reads every .md at the wiki root as a page, so this file carries its keys:
+title: Curation policy
+category: meta
+tags: [policy]
+sources: []
+created: 2026-09-14
+updated: 2026-09-14
+---
 # Wiki — curation policy
 
 This folder is a wiki of durable facts, opened in Obsidian by its owner and

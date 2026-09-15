@@ -37,9 +37,10 @@ def _cell(value) -> str:
     return " ".join(str(value).split()).replace("|", r"\|")
 
 
-def _link(wiki: Path, page: Path, meta: dict) -> str:
+def _link(wiki: Path, page: Path, meta: dict, sep: str = "|") -> str:
+    """A table cell passes `\\|`: a bare `|` would split the cell the link sits in."""
     target = _cell(page.relative_to(wiki).with_suffix(""))
-    return f"[[{target}|{_cell(meta.get('title', page.stem))}]]"
+    return f"[[{target}{sep}{_cell(meta.get('title', page.stem))}]]"
 
 
 def _tags(meta: dict) -> str:
@@ -49,12 +50,16 @@ def _tags(meta: dict) -> str:
 
 
 def _generated_meta(title: str, rows: list[tuple[Path, dict]]) -> dict:
-    """`updated` is the newest among the pages listed, so a new day alone churns nothing."""
-    updated = max((str(m["updated"]) for _, m in rows if "updated" in m), default="")
+    """The keys obsidian-wiki's lint requires; dates span the pages listed, so a day alone churns."""
+    today = datetime.now(UTC).date().isoformat()
     return {
         "title": title,
         "generated": True,
-        "updated": updated or datetime.now(UTC).date().isoformat(),
+        "category": "generated",
+        "tags": ["generated"],
+        "sources": [],
+        "created": min((str(m["created"]) for _, m in rows if "created" in m), default=today),
+        "updated": max((str(m["updated"]) for _, m in rows if "updated" in m), default=today),
     }
 
 
@@ -89,7 +94,8 @@ def _render_table(wiki: Path, name: str, spec: dict, rows: list[tuple[Path, dict
         lines += ["| " + " | ".join(map(_cell, columns)) + " |", "|" + "---|" * len(columns)]
         for page, meta in members:
             cells = [
-                _link(wiki, page, meta) if c == "title" else _cell(meta.get(c, "")) for c in columns
+                _link(wiki, page, meta, r"\|") if c == "title" else _cell(meta.get(c, ""))
+                for c in columns
             ]
             lines.append("| " + " | ".join(cells) + " |")
         lines.append("")

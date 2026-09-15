@@ -39,6 +39,12 @@ tables:
     group_by: stage
     sort_by: due
     columns: [title, state, next_step, due]
+title: scheduling schema
+category: meta
+tags: [schema]
+sources: []
+created: 2026-09-01
+updated: 2026-09-01
 ---
 """
 

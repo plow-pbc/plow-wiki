@@ -3,6 +3,7 @@ import os
 import tomllib
 
 import pytest
+from obsidian_wiki.lint import lint_vault
 
 from tests.conftest import REPO, run_wiki
 
@@ -141,6 +142,8 @@ def test_nightly_end_to_end(sched_wiki):
     assert "## scheduling" in table.read_text()
     hist = run_wiki("history", "scheduling/pipelines/fundraising/acme.md", env=env)
     assert "calendaring" in hist.stdout
+    findings = lint_vault(sched_wiki)["findings"]  # plow-wiki's own files pass obsidian-wiki's lint
+    assert findings["missing_frontmatter"] == findings["broken_links"] == [], findings
 
 
 def test_latch_manifest_matches_the_cli():

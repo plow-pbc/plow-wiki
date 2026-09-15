@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import os
 import sys
+from datetime import UTC, datetime
 from importlib import resources
 from pathlib import Path
 
@@ -18,6 +19,13 @@ BASE_SCHEMA = """---
 root: {root}
 required: [title, summary, category, tags, sources, created, updated]
 fields: {{}}
+# obsidian-wiki's lint reads every .md under _meta as a page, so this file carries its keys:
+title: {root} schema
+category: meta
+tags: [schema]
+sources: []
+created: {today}
+updated: {today}
 ---
 # {root}/
 
@@ -47,10 +55,13 @@ def cmd_init(args: argparse.Namespace) -> int:
     for name in ("AGENTS.md", "wiki.toml"):
         _write_absent(wiki, wiki / name, _data(name).read_text())
     (wiki / "_raw").mkdir(exist_ok=True)
+    today = datetime.now(UTC).date().isoformat()
     for root in paths.load_roots(wiki):
         paths.contained(wiki, wiki / root).mkdir(exist_ok=True)
         shipped = _data(f"meta/schemas/{root}.md")
-        text = shipped.read_text() if shipped.is_file() else BASE_SCHEMA.format(root=root)
+        text = (
+            shipped.read_text() if shipped.is_file() else BASE_SCHEMA.format(root=root, today=today)
+        )
         _write_absent(wiki, schema_path(wiki, root), text)
     print(f"initialized {wiki}")
     return 0

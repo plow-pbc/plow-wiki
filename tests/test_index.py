@@ -44,7 +44,7 @@ def test_table_groups_by_stage_and_sorts_by_due(sched_wiki):
     assert beta < acme
     assert (
         "| Gamma Partners" not in body
-        and "[[scheduling/pipelines/fundraising/gamma|Gamma Partners]]" in body
+        and r"[[scheduling/pipelines/fundraising/gamma\|Gamma Partners]]" in body
     )
 
 
@@ -113,7 +113,8 @@ def test_a_newline_summary_and_a_pipe_title_forge_neither_a_line_nor_a_column(sc
 
     table = (sched_wiki / "scheduling" / "pipelines" / "fundraising.md").read_text()
     rows = [ln for ln in table.splitlines() if ln.startswith("| [[")]
-    assert len({len(re.split(r"(?<!\\)\|", ln)) for ln in rows}) == 1, rows
+    cells = len(["", "title", "state", "next_step", "due", ""])  # a link's own `|` splits no cell
+    assert {len(re.split(r"(?<!\\)\|", ln)) for ln in rows} == {cells}, rows
     assert "Acme \\| Capital" in table
 
 
