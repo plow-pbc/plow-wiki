@@ -95,7 +95,7 @@ def _targets(wiki: Path, by_root: dict) -> dict[Path, str]:
     for root in paths.load_roots(wiki):
         if not (wiki / root).is_dir():
             continue
-        for spec in load_schema(wiki / root).tables:
+        for spec in load_schema(wiki, root).tables:
             match = spec.get("match", {})
             rows = [
                 (p, m)

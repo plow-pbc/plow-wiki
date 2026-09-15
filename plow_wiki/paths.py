@@ -11,8 +11,21 @@ from pathlib import Path
 
 from plow_wiki.frontmatter import FrontmatterError, parse
 
-SKIP_DIRS = frozenset({"_raw", "_archived", "_staging", ".obsidian", ".wiki", ".git"})
-SKIP_FILES = frozenset({"index.md", "log.md", "hot.md", "AGENTS.md", "_schema.md"})
+# obsidian-wiki's staging, archive and metadata folders (its graph_analysis.SKIP_DIRS), and ours.
+SKIP_DIRS = frozenset(
+    {
+        "_raw",
+        "_archived",
+        "_staging",
+        "_archives",
+        "_meta",
+        "_readouts",
+        ".obsidian",
+        ".wiki",
+        ".git",
+    }
+)
+SKIP_FILES = frozenset({"index.md", "log.md", "hot.md", "AGENTS.md"})
 DEFAULT_WIKI = "~/Plow/wiki"
 _SAFE_SEGMENT = re.compile(r"[A-Za-z0-9._-]+")
 

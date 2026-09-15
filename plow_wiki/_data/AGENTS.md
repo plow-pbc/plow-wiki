@@ -2,7 +2,7 @@
 
 This folder is a wiki of durable facts, opened in Obsidian by its owner and
 written by agents and humans alike. `wiki.toml` lists its top-level roots and
-who writes each; `<root>/_schema.md` says what a page in that root must carry.
+who writes each; `_meta/schemas/<root>.md` says what a page in that root must carry.
 `index.md` and any page marked `generated: true` are rebuilt by `wiki index`;
 do not edit them by hand.
 

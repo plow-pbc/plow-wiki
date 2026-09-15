@@ -20,7 +20,8 @@ def test_init_lays_out_the_wiki(wiki):
     roots = tomllib.loads((wiki / "wiki.toml").read_text())["roots"]
     assert set(roots) == {"owner", "people", "orgs"}
     for root in roots:
-        assert (wiki / root / "_schema.md").is_file()
+        assert (wiki / root).is_dir()
+        assert (wiki / "_meta" / "schemas" / f"{root}.md").is_file()
 
 
 def test_init_refuses_a_non_wiki_directory(tmp_path):
@@ -93,7 +94,7 @@ def _leak_schema(const: str = "person", enum: str = "idle") -> str:
     ],
 )
 def test_validate_names_the_problem_and_never_echoes_the_value(wiki, schema, page):
-    (wiki / "people" / "_schema.md").write_text(schema)
+    (wiki / "_meta" / "schemas" / "people.md").write_text(schema)
     (wiki / "people" / "leak.md").write_text(page)
     result = run_wiki("validate", "--wiki", str(wiki))
     assert result.returncode == 1
@@ -169,7 +170,7 @@ def test_init_refuses_a_root_symlinked_out_of_the_wiki(tmp_path):
     result = run_wiki("init", str(target))
     assert result.returncode == 1
     assert "outside the wiki" in result.stderr
-    assert not any(outside.iterdir()), "no _schema.md is written through the symlink"
+    assert not any(outside.iterdir()), "nothing is written through the symlink"
 
 
 def test_init_refuses_a_shipped_file_symlinked_out_of_the_wiki(tmp_path):
@@ -209,10 +210,10 @@ def test_the_wiki_flag_resolves_the_same_wiki_before_or_after_the_subcommand(
 
 
 def test_validate_names_a_root_that_has_no_schema(wiki):
-    (wiki / "people" / "_schema.md").unlink()
+    (wiki / "_meta" / "schemas" / "people.md").unlink()
     result = run_wiki("validate", "--wiki", str(wiki))
     assert result.returncode == 1
-    assert "people/ has no _schema.md" in result.stderr
+    assert "people has no schema: _meta/schemas/people.md is missing" in result.stderr
 
 
 def test_gitignore_keeps_review_artifacts_and_build_output_out_of_the_sdist():

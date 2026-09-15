@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from plow_wiki.schema import load_schema, validate_page
+from plow_wiki.schema import load_schema, schema_path, validate_page
 
 SCHEMA = """---
 root: scheduling
@@ -31,10 +31,16 @@ GOOD = {
 }
 
 
+def _write_schema(wiki: Path, text: str) -> None:
+    path = schema_path(wiki, "scheduling")
+    path.parent.mkdir(parents=True)
+    path.write_text(text)
+
+
 @pytest.fixture
 def schema(tmp_path: Path):
-    (tmp_path / "_schema.md").write_text(SCHEMA)
-    return load_schema(tmp_path)
+    _write_schema(tmp_path, SCHEMA)
+    return load_schema(tmp_path, "scheduling")
 
 
 @pytest.mark.parametrize(
@@ -65,22 +71,20 @@ def test_each_violation_is_named(schema, change, fragment):
 @pytest.mark.parametrize(
     "contents, fragment",
     [
-        (None, "has no _schema.md"),
+        (None, "scheduling has no schema: _meta/schemas/scheduling.md is missing"),
         ("no frontmatter here\n", "no frontmatter block"),
         ("---\n: bad\n---\n", "not valid YAML"),
         ("---\n- a\n- b\n---\n", "not a mapping"),
     ],
 )
 def test_load_schema_refuses_a_missing_or_malformed_schema(tmp_path, contents, fragment):
-    root = tmp_path / "scheduling"
-    root.mkdir()
     if contents is not None:
-        (root / "_schema.md").write_text(contents)
+        _write_schema(tmp_path, contents)
     with pytest.raises(SystemExit) as e:
-        load_schema(root)
+        load_schema(tmp_path, "scheduling")
     assert fragment in str(e.value)
 
 
 def test_a_schema_without_a_root_key_still_loads(tmp_path):
-    (tmp_path / "_schema.md").write_text("---\nrequired: [title]\n---\n")
-    assert load_schema(tmp_path).required == ["title"]
+    _write_schema(tmp_path, "---\nrequired: [title]\n---\n")
+    assert load_schema(tmp_path, "scheduling").required == ["title"]

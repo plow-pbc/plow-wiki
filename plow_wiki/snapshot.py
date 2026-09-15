@@ -28,11 +28,11 @@ _DIFF = (
     "diff.dstPrefix=b/",
 )
 _HUNK = re.compile(r"^@{2,} (?:-\d+(?:,\d+)? )+\+(\d+)(?:,\d+)? @")  # @@ and a merge's @@@
-# Top-level paths that are not roots: what a page walk skips, less the two that are
-# per-root or refused outright, plus the wiki's own files.
+# Top-level paths that are not roots: what a page walk skips, less `.git` (refused outright),
+# plus the wiki's own files.
 HOUSEKEEPING = (
     paths.SKIP_DIRS | paths.SKIP_FILES | {"wiki.toml", ".manifest.json", ".DS_Store", ".trash"}
-) - {"_schema.md", ".git"}
+) - {".git"}
 
 
 class Snapshot(NamedTuple):

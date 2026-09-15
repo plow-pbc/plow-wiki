@@ -20,10 +20,15 @@ class Schema:
     tables: list[dict] = field(default_factory=list)
 
 
-def load_schema(root_dir: Path) -> Schema:
-    path = root_dir / "_schema.md"
+def schema_path(wiki: Path, root: str) -> Path:
+    """Beside obsidian-wiki's own owner metadata, never among the pages a glob of a root finds."""
+    return wiki / "_meta" / "schemas" / f"{root}.md"
+
+
+def load_schema(wiki: Path, root: str) -> Schema:
+    path = schema_path(wiki, root)
     if not path.is_file():
-        sys.exit(f"{root_dir.name}/ has no _schema.md")
+        sys.exit(f"{root} has no schema: {path.relative_to(wiki)} is missing")
     try:
         meta, _ = parse(path.read_text())
     except FrontmatterError as e:

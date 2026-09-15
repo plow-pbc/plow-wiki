@@ -76,7 +76,7 @@ def test_a_traversal_field_value_writes_nothing_inside_or_outside_the_wiki(sched
 
 
 def test_a_traversal_table_path_in_a_schema_writes_nothing_outside_the_wiki(sched_wiki):
-    (sched_wiki / "scheduling" / "_schema.md").write_text(
+    (sched_wiki / "_meta" / "schemas" / "scheduling.md").write_text(
         SCHEDULING_SCHEMA.replace("pipelines/{pipeline}.md", "../../../pwned.md")
     )
     escaped = sched_wiki.parent.parent / "pwned.md"

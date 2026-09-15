@@ -71,7 +71,7 @@ def sched_wiki(wiki: Path):
     )
     d = wiki / "scheduling" / "pipelines" / "fundraising"
     d.mkdir(parents=True)
-    (wiki / "scheduling" / "_schema.md").write_text(SCHEDULING_SCHEMA)
+    (wiki / "_meta" / "schemas" / "scheduling.md").write_text(SCHEDULING_SCHEMA)
     (d / "acme.md").write_text(_rel("Acme Capital", "scheduling", "2026-09-20"))
     (d / "beta.md").write_text(_rel("Beta Fund", "scheduling", "2026-09-10"))
     (d / "gamma.md").write_text(_rel("Gamma Partners", "met", "2026-09-05", state="met"))

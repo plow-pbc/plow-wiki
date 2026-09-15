@@ -23,7 +23,7 @@ wiki, use the file tools and the `wiki` command directly.
 2. Read `wiki.toml`: which roots exist and who writes each. Write only to a
    root whose `writer` is your agent name or `shared`. Never create a
    top-level folder.
-3. Read `<root>/_schema.md` for the frontmatter the root requires.
+3. Read `_meta/schemas/<root>.md` for the frontmatter the root requires.
 
 ## Reading
 
