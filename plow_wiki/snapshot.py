@@ -33,7 +33,8 @@ _HUNK = re.compile(r"^(@{2,}) (?:-\d+(?:,\d+)? )+\+(\d+)(?:,\d+)? @")  # @@, and
 HOUSEKEEPING = (paths.SKIP_DIRS | {".trash", "attachments"}) - {".git"}
 # obsidian-wiki's vault config, which may carry API keys: never scanned, staged or committed.
 ENV = ".env"
-_ALL_BUT_ENV = ("--", ".", f":(exclude){ENV}")
+# Every page but ENV, shared by `add` and `status` so an untracked .env is never a change.
+_PAGES = ("--", ".", f":(exclude){ENV}")
 
 
 class Snapshot(NamedTuple):
@@ -91,7 +92,7 @@ def _scan_worktree(wiki: Path) -> None:
         rel = path.relative_to(wiki)
         # git stores a symlink as its target path, never the target's bytes: reading through
         # one would scan a file the wiki does not own and will never commit.
-        if path.is_symlink() or not path.is_file() or ".git" in rel.parts or rel == Path(ENV):
+        if path.is_symlink() or not path.is_file() or ".git" in rel.parts or str(rel) == ENV:
             continue
         for n, line in enumerate(path.read_bytes().decode("utf-8", "replace").splitlines(), 1):
             if CREDENTIAL.search(line):
@@ -181,9 +182,9 @@ def snapshot(wiki: Path, author: str, push: bool = False) -> Snapshot | None:
     _ensure_repo(wiki)
     _scan_worktree(wiki)  # a refused credential must never reach the object database
     # -f: no in-wiki .gitignore may hide a page from history, so only a pathspec leaves .env out
-    _git(wiki, "add", "-A", "-f", *_ALL_BUT_ENV)
+    _git(wiki, "add", "-A", "-f", *_PAGES)
     has_head = _git(wiki, "rev-parse", "--verify", "HEAD", check=False).returncode == 0
-    if not _git(wiki, "status", "--porcelain", *_ALL_BUT_ENV).stdout.strip():
+    if not _git(wiki, "status", "--porcelain", *_PAGES).stdout.strip():
         # A night whose push failed leaves commits behind origin — send them, never no-op.
         if not (push and has_head and _scan_before_push(wiki)):
             return None
