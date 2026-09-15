@@ -50,7 +50,11 @@ def _tags(meta: dict) -> str:
 
 
 def _generated_meta(title: str, rows: list[tuple[Path, dict]]) -> dict:
-    """obsidian-wiki's required keys; dates span the pages listed, so a day alone churns nothing."""
+    """obsidian-wiki's required keys; dates span the pages listed, so a day alone churns nothing.
+
+    Compared by calendar day: a datetime's own offset decides its day, and strings of mixed
+    offsets would not order as the instants they name.
+    """
     today = datetime.now(UTC).date().isoformat()
     return {
         "title": title,
@@ -58,8 +62,8 @@ def _generated_meta(title: str, rows: list[tuple[Path, dict]]) -> dict:
         "category": "generated",
         "tags": ["generated"],
         "sources": [],
-        "created": min((str(m["created"]) for _, m in rows if "created" in m), default=today),
-        "updated": max((str(m["updated"]) for _, m in rows if "updated" in m), default=today),
+        "created": min((str(m["created"])[:10] for _, m in rows if "created" in m), default=today),
+        "updated": max((str(m["updated"])[:10] for _, m in rows if "updated" in m), default=today),
     }
 
 
