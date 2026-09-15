@@ -173,7 +173,7 @@ def test_generated_updated_falls_back_to_today_when_no_page_carries_one(wiki):
 OPERATIONS_SCHEMA = """---
 required: [title]
 tables:
-  - into: "{property}"
+  - into: property
     section: "## Operations"
     match: {type: Operation}
     sort_by: title
@@ -246,6 +246,19 @@ def _hand_edit_the_table(wiki: Path) -> None:
     build(wiki)
     hub = wiki / "str" / "properties" / "casa.md"
     hub.write_text(hub.read_text().replace("Router in the hall", "Router moved"))
+
+
+def test_a_write_that_fails_leaves_the_hand_written_hub_whole(hub_wiki, monkeypatch):
+    hub = hub_wiki / "str" / "properties" / "casa.md"
+    before = hub.read_text()
+
+    def interrupted(src, dst):
+        raise OSError("disk full")
+
+    monkeypatch.setattr("plow_wiki.index.os.replace", interrupted)
+    with pytest.raises(OSError):
+        build(hub_wiki)
+    assert hub.read_text() == before
 
 
 @pytest.mark.parametrize(

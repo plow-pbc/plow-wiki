@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import sys
 from collections import defaultdict
 from datetime import UTC, datetime
@@ -160,7 +161,7 @@ def _file_tables(wiki: Path, root: str, spec: dict, rows: list, files: dict, reg
 
 def _section_tables(wiki: Path, spec: dict, rows: list, files: dict, regions: Regions):
     """A table inside a hand-written page: each page `into`'s wikilink field names."""
-    key, section = spec["into"].strip("{}"), spec["section"]
+    key, section = spec["into"], spec["section"]
     by_target: dict[Path, list] = defaultdict(list)
     for page, meta in rows:
         if key in meta:
@@ -197,6 +198,13 @@ def _outputs(wiki: Path, by_root: dict) -> tuple[dict[Path, str], Regions]:
     return files, regions
 
 
+def _replace(path: Path, text: str) -> None:
+    """Whole or not at all: a hub is hand-written, so a write cut short must never truncate it."""
+    tmp = path.with_name(f".{path.name}.tmp")
+    tmp.write_text(text)
+    os.replace(tmp, path)
+
+
 def build(wiki: Path, force: bool = False) -> list[Path]:
     paths.refuse_git_inside(wiki)
     record_path = paths.contained(wiki, wiki / GENERATED)
@@ -220,8 +228,8 @@ def build(wiki: Path, force: bool = False) -> list[Path]:
         del recorded[key]
     for path, text in files.items():
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(text)
+        _replace(path, text)
     recorded |= {key: _sha(new) for key, (_, new) in regions.items()}
     record_path.parent.mkdir(exist_ok=True)
-    record_path.write_text(json.dumps(recorded, indent=1, sort_keys=True))
+    _replace(record_path, json.dumps(recorded, indent=1, sort_keys=True))
     return list(files)
