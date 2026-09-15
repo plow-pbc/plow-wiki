@@ -24,13 +24,15 @@ def test_index_lists_every_page_under_its_root_in_obsidian_wikis_entry_format(
     assert lines.index(entry + suffix) > lines.index("## scheduling")
 
 
-def test_index_md_is_rewritten_over_a_hand_edit(sched_wiki):
-    """obsidian-wiki's skills update index.md after every write; a refusal fails every nightly."""
+@pytest.mark.parametrize("name", ["index.md", ".wiki/chunks.json"])
+def test_index_md_is_rewritten_over_a_hand_edit(sched_wiki, name):
+    """obsidian-wiki's skills update index.md after every write, and chunks.json is recall's copy
+    of the pages; a refusal of either would only fail the nightly."""
     build(sched_wiki)
-    index = sched_wiki / "index.md"
-    index.write_text(index.read_text() + "- [[scheduling/new-page]] — added by wiki-ingest\n")
+    target = sched_wiki / name
+    target.write_text(target.read_text() + "- [[scheduling/new-page]] — added by wiki-ingest\n")
     build(sched_wiki)
-    assert "wiki-ingest" not in index.read_text()
+    assert "wiki-ingest" not in target.read_text()
 
 
 def test_table_groups_by_stage_and_sorts_by_due(sched_wiki):
@@ -237,9 +239,6 @@ def test_index_writes_recall_chunks_one_per_page_and_one_per_fact(wiki):
     assert recorded[".wiki/chunks.json"] == hashlib.sha256(first).hexdigest()
     build(wiki)
     assert path.read_bytes() == first, "an unchanged wiki rewrites the same bytes"
-    path.write_text("hand edit\n")
-    build(wiki)
-    assert path.read_bytes() == first, "recall's copy is rebuilt over a hand edit, never refused"
 
 
 OPERATIONS_SCHEMA = """---
