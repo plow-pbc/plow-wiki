@@ -37,9 +37,10 @@ Read the page first, then rewrite the bullet that already covers the fact, or
 add one. Never append a duplicate. Cite the source in `sources:`. Keep
 `updated:` current. Never write a credential, card, account number, or code.
 
-`index.md` and any page with `generated: true` are rebuilt by `wiki index`;
-do not edit them, and skip the "update index.md" steps other wiki skills
-describe. The obsidian-wiki skills (`wiki-query`, `wiki-ingest`, `wiki-lint`,
+`wiki index` rewrites `index.md` from page frontmatter every run, so an
+"update index.md" step in another wiki skill is harmless. Never edit a page
+with `generated: true`: `wiki index` refuses to overwrite one that changed.
+The obsidian-wiki skills (`wiki-query`, `wiki-ingest`, `wiki-lint`,
 `wiki-digest`) apply for the how; this file wins where they differ.
 
 ## Nightly

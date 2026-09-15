@@ -1,4 +1,4 @@
-"""index.md and the tables each root's schema declares — generated, never hand-edited."""
+"""index.md and the tables each root's schema declares — generated from page frontmatter."""
 
 from __future__ import annotations
 
@@ -14,6 +14,7 @@ from plow_wiki.frontmatter import FrontmatterError, dump, parse
 from plow_wiki.schema import load_schema
 
 GENERATED = ".wiki/generated.json"
+INDEX = "index.md"
 
 
 def _sha(path: Path) -> str:
@@ -41,6 +42,12 @@ def _link(wiki: Path, page: Path, meta: dict) -> str:
     return f"[[{target}|{_cell(meta.get('title', page.stem))}]]"
 
 
+def _tags(meta: dict) -> str:
+    """obsidian-wiki's ` ( #tag1 #tag2)`, which `wiki-query` filters on; nothing for no tags."""
+    tags = " ".join(f"#{_cell(tag)}" for tag in meta.get("tags", []))
+    return f" ( {tags})" if tags else ""
+
+
 def _generated_meta(title: str, rows: list[tuple[Path, dict]]) -> dict:
     """`updated` is the newest among the pages listed, so a new day alone churns nothing."""
     updated = max((str(m["updated"]) for _, m in rows if "updated" in m), default="")
@@ -56,7 +63,8 @@ def _render_index(wiki: Path, by_root: dict) -> str:
     for root in paths.load_roots(wiki):
         lines.append(f"## {root}")
         for page, meta in sorted(by_root.get(root, []), key=lambda pm: str(pm[1].get("title", ""))):
-            lines.append(f"- {_link(wiki, page, meta)} — {_cell(meta.get('summary', ''))}")
+            summary = _cell(meta.get("summary", ""))
+            lines.append(f"- {_link(wiki, page, meta)} — {summary}{_tags(meta)}")
         lines.append("")
     listed = [pm for pages in by_root.values() for pm in pages]
     return dump(_generated_meta("Wiki Index", listed), "\n".join(lines))
@@ -91,7 +99,7 @@ def _render_table(wiki: Path, name: str, spec: dict, rows: list[tuple[Path, dict
 
 def _targets(wiki: Path, by_root: dict) -> dict[Path, str]:
     """Every generated file and its new content."""
-    out = {wiki / "index.md": _render_index(wiki, by_root)}
+    out = {wiki / INDEX: _render_index(wiki, by_root)}
     for root in paths.load_roots(wiki):
         if not (wiki / root).is_dir():
             continue
@@ -131,7 +139,13 @@ def build(wiki: Path, force: bool = False) -> list[Path]:
     if not force:
         for target in [*targets, *stale]:
             rel = str(target.relative_to(wiki))
-            if target.exists() and rel in recorded and _sha(target) != recorded[rel]:
+            # index.md is derived, and obsidian-wiki's skills rewrite it after every write.
+            if (
+                rel != INDEX
+                and target.exists()
+                and rel in recorded
+                and _sha(target) != recorded[rel]
+            ):
                 sys.exit(
                     f"{rel} was hand-edited since `wiki index` wrote it; "
                     f"generated files are rebuilt from page frontmatter. Re-run with --force to overwrite."

@@ -11,13 +11,26 @@ from plow_wiki.index import build
 from tests.conftest import SCHEDULING_SCHEMA
 
 
-def test_index_lists_every_page_under_its_root(sched_wiki):
+@pytest.mark.parametrize("tags, suffix", [(["x"], " ( #x)"), (["x", "y"], " ( #x #y)"), (None, "")])
+def test_index_lists_every_page_under_its_root_in_obsidian_wikis_entry_format(
+    sched_wiki, tags, suffix
+):
+    _with_field(sched_wiki / "scheduling" / "pipelines" / "fundraising" / "acme.md", tags=tags)
     build(sched_wiki)
-    text = (sched_wiki / "index.md").read_text()
-    meta, body = parse(text)
+    meta, body = parse((sched_wiki / "index.md").read_text())
     assert meta["generated"] is True
-    assert "## scheduling" in body
-    assert "[[scheduling/pipelines/fundraising/acme|Acme Capital]] — Acme Capital summary" in body
+    lines = body.splitlines()
+    entry = "- [[scheduling/pipelines/fundraising/acme|Acme Capital]] — Acme Capital summary"
+    assert lines.index(entry + suffix) > lines.index("## scheduling")
+
+
+def test_index_md_is_rewritten_over_a_hand_edit(sched_wiki):
+    """obsidian-wiki's skills update index.md after every write; refusing would fail every nightly."""
+    build(sched_wiki)
+    index = sched_wiki / "index.md"
+    index.write_text(index.read_text() + "- [[scheduling/new-page]] — added by wiki-ingest\n")
+    build(sched_wiki)
+    assert "wiki-ingest" not in index.read_text()
 
 
 def test_table_groups_by_stage_and_sorts_by_due(sched_wiki):
