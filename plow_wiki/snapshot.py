@@ -33,6 +33,9 @@ _HUNK = re.compile(r"^@{2,} (?:-\d+(?:,\d+)? )+\+(\d+)(?:,\d+)? @")  # @@ and a 
 HOUSEKEEPING = (
     paths.SKIP_DIRS | paths.SKIP_FILES | {"wiki.toml", ".manifest.json", ".DS_Store", ".trash"}
 ) - {"_schema.md", ".git"}
+# Rebuilt from pages by `wiki index` and agent recall; history exists to recover pages, and
+# a night's megabytes of base64 vectors would both bloat it and trip the credential scan.
+DERIVED = (".wiki/chunks.json", ".wiki/embeddings.json")
 
 
 class Snapshot(NamedTuple):
@@ -88,7 +91,7 @@ def _scan_worktree(wiki: Path) -> None:
         rel = path.relative_to(wiki)
         # git stores a symlink as its target path, never the target's bytes: reading through
         # one would scan a file the wiki does not own and will never commit.
-        if path.is_symlink() or not path.is_file() or ".git" in rel.parts:
+        if path.is_symlink() or not path.is_file() or ".git" in rel.parts or str(rel) in DERIVED:
             continue
         for n, line in enumerate(path.read_bytes().decode("utf-8", "replace").splitlines(), 1):
             if CREDENTIAL.search(line):
@@ -178,7 +181,8 @@ def snapshot(wiki: Path, author: str, push: bool = False) -> Snapshot | None:
         sys.exit(f"--push: {history_dir(wiki)} has no 'origin' remote")
     _ensure_repo(wiki)
     _scan_worktree(wiki)  # a refused credential must never reach the object database
-    _git(wiki, "add", "-A", "-f")  # -f: an in-wiki .gitignore must not hide pages from history
+    # -f: an in-wiki .gitignore must not hide pages from history.
+    _git(wiki, "add", "-A", "-f", "--", ".", *(f":(exclude){p}" for p in DERIVED))
     has_head = _git(wiki, "rev-parse", "--verify", "HEAD", check=False).returncode == 0
     if not _git(wiki, "status", "--porcelain").stdout.strip():
         # A night whose push failed leaves commits behind origin — send them, never no-op.
