@@ -42,7 +42,7 @@ tables:
     group_by: stage
     sort_by: due
     columns: [title, state, due]
-  - into: "{property}"  # inside the page each matching page's wikilink field names
+  - into: property  # inside the page each matching page's wikilink field names
     section: "## Operations"
     match: {type: Operation}
     sort_by: title
