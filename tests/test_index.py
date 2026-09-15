@@ -239,6 +239,17 @@ def test_index_writes_recall_chunks_one_per_page_and_one_per_fact(wiki):
     assert path.read_bytes() == first, "an unchanged wiki rewrites the same bytes"
 
 
+def test_index_refuses_to_overwrite_a_hand_edited_chunks_file(wiki):
+    """chunks.json is guarded exactly like a generated table, unlike index.md."""
+    build(wiki)
+    chunks = wiki / ".wiki" / "chunks.json"
+    chunks.write_text(chunks.read_text() + "hand edit\n")
+    with pytest.raises(SystemExit, match="hand-edited"):
+        build(wiki)
+    build(wiki, force=True)
+    assert "hand edit" not in chunks.read_text()
+
+
 OPERATIONS_SCHEMA = """---
 required: [title]
 tables:
