@@ -159,7 +159,7 @@ def test_index_writes_recall_chunks_one_per_page_and_one_per_fact(wiki):
                 "tags": ["person", "investor"],
                 "sources": ["email:1"],
                 "created": "2026-09-01",
-                "updated": "2026-09-13",
+                "updated": datetime(2026, 9, 13, 8, 0, tzinfo=UTC),
             },
             "- Prefers 30-minute video calls before noon Eastern.\n"
             "  - Mornings only in winter. ^[inferred]\n"

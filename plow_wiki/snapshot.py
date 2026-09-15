@@ -36,6 +36,9 @@ HOUSEKEEPING = (
 # Rebuilt from pages by `wiki index` and agent recall; history exists to recover pages, and
 # a night's megabytes of base64 vectors would both bloat it and trip the credential scan.
 DERIVED = (".wiki/chunks.json", ".wiki/embeddings.json")
+# Every page, none of DERIVED — shared by `add` and `status` so a quiet night (derived files
+# present but unchanged pages) reads as clean instead of "untracked files present".
+_PAGES = ("--", ".", *(f":(exclude){p}" for p in DERIVED))
 
 
 class Snapshot(NamedTuple):
@@ -182,9 +185,9 @@ def snapshot(wiki: Path, author: str, push: bool = False) -> Snapshot | None:
     _ensure_repo(wiki)
     _scan_worktree(wiki)  # a refused credential must never reach the object database
     # -f: an in-wiki .gitignore must not hide pages from history.
-    _git(wiki, "add", "-A", "-f", "--", ".", *(f":(exclude){p}" for p in DERIVED))
+    _git(wiki, "add", "-A", "-f", *_PAGES)
     has_head = _git(wiki, "rev-parse", "--verify", "HEAD", check=False).returncode == 0
-    if not _git(wiki, "status", "--porcelain").stdout.strip():
+    if not _git(wiki, "status", "--porcelain", *_PAGES).stdout.strip():
         # A night whose push failed leaves commits behind origin — send them, never no-op.
         if not (push and has_head and _scan_before_push(wiki)):
             return None

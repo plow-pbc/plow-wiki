@@ -286,3 +286,4 @@ def test_snapshot_neither_scans_nor_commits_the_derived_recall_files(wiki):
     committed = _git(wiki, "ls-tree", "-r", "--name-only", "HEAD").splitlines()
     assert "people/jane.md" in committed
     assert ".wiki/chunks.json" not in committed and ".wiki/embeddings.json" not in committed
+    assert snapshot(wiki, author="a") is None
