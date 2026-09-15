@@ -34,9 +34,14 @@ def _load_pages(wiki: Path) -> dict[str, list[tuple[Path, dict]]]:
     return by_root
 
 
+def _line(value) -> str:
+    """One line of authored text: no newline forges another."""
+    return " ".join(str(value).split())
+
+
 def _cell(value) -> str:
     """One index line or table cell: no newline forges a row, no `|` breaks one."""
-    return " ".join(str(value).split()).replace("|", r"\|")
+    return _line(value).replace("|", r"\|")
 
 
 def _link(wiki: Path, page: Path, meta: dict) -> str:
@@ -93,22 +98,26 @@ def _render_table(wiki: Path, name: str, spec: dict, rows: list[tuple[Path, dict
 
 
 def _render_chunks(wiki: Path, by_root: dict) -> str:
-    """What recall embeds: each page's summary and tags, then each fact bullet, in body order."""
+    """What recall embeds: each page's summary and tags, then each fact bullet, in body order.
+
+    Each chunk carries its root's writer, so recall can keep an agent-owned root to that agent."""
+    writers = paths.load_roots(wiki)
     pages = sorted(
-        (pm for pms in by_root.values() for pm in pms), key=lambda pm: pm[0].relative_to(wiki)
+        ((page, meta, writers[root]) for root, pms in by_root.items() for page, meta in pms),
+        key=lambda pmw: pmw[0].relative_to(wiki),
     )
     chunks = []
-    for page, meta in pages:
+    for page, meta, writer in pages:
         slug = str(page.relative_to(wiki).with_suffix(""))
-        title = _cell(meta.get("title", page.stem))
+        title = _line(meta.get("title", page.stem))
         tags = " ".join(f"#{t}" for t in meta.get("tags", []))
-        lead = " ".join(part for part in (_cell(meta.get("summary", "")), tags) if part)
+        lead = " ".join(part for part in (_line(meta.get("summary", "")), tags) if part)
         _, body = parse(page.read_text())
         texts = ([lead] if lead else []) + [
             m.group(1) for m in map(_FACT.match, body.splitlines()) if m
         ]
-        chunks += [{"page": slug, "title": title, "text": text} for text in texts]
-    updated = _generated_meta("", pages)["updated"]
+        chunks += [{"page": slug, "title": title, "writer": writer, "text": t} for t in texts]
+    updated = _generated_meta("", [(page, meta) for page, meta, _ in pages])["updated"]
     return json.dumps({"updated": updated, "chunks": chunks}, indent=1, ensure_ascii=False) + "\n"
 
 

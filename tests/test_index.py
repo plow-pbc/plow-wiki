@@ -154,7 +154,7 @@ def test_index_writes_recall_chunks_one_per_page_and_one_per_fact(wiki):
             {
                 "type": "person",
                 "title": "Jane Doe",
-                "summary": "Partner at Example Ventures.",
+                "summary": "Partner at Example | Ventures.",
                 "category": "people",
                 "tags": ["person", "investor"],
                 "sources": ["email:1"],
@@ -172,27 +172,19 @@ def test_index_writes_recall_chunks_one_per_page_and_one_per_fact(wiki):
     build(wiki)
     path = wiki / ".wiki" / "chunks.json"
     first = path.read_bytes()
-    assert json.loads(first) == {
-        "updated": "2026-09-13",
-        "chunks": [
-            {
-                "page": "people/jane-doe",
-                "title": "Jane Doe",
-                "text": "Partner at Example Ventures. #person #investor",
-            },
-            {
-                "page": "people/jane-doe",
-                "title": "Jane Doe",
-                "text": "Prefers 30-minute video calls before noon Eastern.",
-            },
-            {
-                "page": "people/jane-doe",
-                "title": "Jane Doe",
-                "text": "Mornings only in winter. ^[inferred]",
-            },
-            {"page": "people/jane-doe", "title": "Jane Doe", "text": "Assistant books her travel."},
-        ],
+    payload = json.loads(first)
+    assert payload["updated"] == "2026-09-13"
+    chunks = payload["chunks"]
+    # The writer is the root's, from wiki.toml: recall keeps an agent-owned root to its agent.
+    assert {(c["page"], c["title"], c["writer"]) for c in chunks} == {
+        ("people/jane-doe", "Jane Doe", "shared")
     }
+    assert [c["text"] for c in chunks] == [
+        "Partner at Example | Ventures. #person #investor",  # authored text, not a table cell
+        "Prefers 30-minute video calls before noon Eastern.",
+        "Mornings only in winter. ^[inferred]",
+        "Assistant books her travel.",
+    ]
     recorded = json.loads((wiki / ".wiki" / "generated.json").read_text())
     assert recorded[".wiki/chunks.json"] == hashlib.sha256(first).hexdigest()
     build(wiki)
