@@ -62,11 +62,13 @@ def load_roots(wiki: Path) -> dict[str, str]:
     return {name: spec["writer"] for name, spec in roots.items()}
 
 
-def contained(wiki: Path, path: Path) -> Path:
-    """The resolved path, refusing one a symlink or `..` carries out of the wiki."""
+def contained(wiki: Path, path: Path, source: str | None = None) -> Path:
+    """The resolved path, refusing one a symlink or `..` carries out of the wiki.
+
+    `source` names where an untrusted path came from, so the refusal never echoes it."""
     resolved = path.resolve()
     if not resolved.is_relative_to(wiki.resolve()):
-        sys.exit(f"refusing — {os.path.relpath(path, wiki)} is outside the wiki")
+        sys.exit(f"refusing — {source or os.path.relpath(path, wiki)} is outside the wiki")
     return resolved
 
 

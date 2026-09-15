@@ -30,6 +30,31 @@ another root. Its pages take the last segment as their `category`, its schema
 is `_meta/schemas/str/operations.md`, and `index.md` gives it a
 `## str/operations` section.
 
+## Tables
+
+A root's schema may declare tables, and `wiki index` rebuilds them from page
+frontmatter:
+
+```yaml
+tables:
+  - path: pipelines/{pipeline}.md  # one generated file per value of `pipeline`
+    match: {type: relationship}
+    group_by: stage
+    sort_by: due
+    columns: [title, state, due]
+  - into: "{property}"  # inside the page each matching page's wikilink field names
+    section: "## Operations"
+    match: {type: Operation}
+    sort_by: title
+    columns: [title, summary]
+```
+
+A section table replaces only the lines between its heading and the next `## `
+heading; the rest of the page stays the owner's. `wiki index` writes nothing
+when a linked page or its heading is missing, and refuses to overwrite a table
+edited by hand unless run with `--force`. A page that no page links any more
+keeps its last table.
+
 ## Agent skills
 
 An agent that uses the wiki needs five skills. One is this repo's
