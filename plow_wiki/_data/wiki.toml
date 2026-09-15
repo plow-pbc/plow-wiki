@@ -1,0 +1,9 @@
+# Top-level folders of the wiki and who may write them. "shared" means any
+# agent, reading the page first and folding into it. Anything else is exactly
+# one agent name. `wiki snapshot` refuses a top-level folder not listed here.
+[roots.owner]
+writer = "shared"
+[roots.people]
+writer = "shared"
+[roots.orgs]
+writer = "shared"

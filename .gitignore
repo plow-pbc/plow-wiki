@@ -1,3 +1,5 @@
 docs/superpowers/
 .venv/
 __pycache__/
+.superpowers/
+dist/
