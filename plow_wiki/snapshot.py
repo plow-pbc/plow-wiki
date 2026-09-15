@@ -67,7 +67,7 @@ def _ensure_repo(wiki: Path) -> None:
 
 def _refuse_undeclared_roots(wiki: Path) -> None:
     """Folders only: Obsidian's New note lands a file at the root, and a file is just committed."""
-    allowed = set(paths.load_roots(wiki)) | HOUSEKEEPING
+    allowed = {root.split("/")[0] for root in paths.load_roots(wiki)} | HOUSEKEEPING
     for entry in wiki.iterdir():
         if entry.is_dir() and entry.name not in allowed:
             sys.exit(
