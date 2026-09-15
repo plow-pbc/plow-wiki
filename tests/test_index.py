@@ -237,17 +237,9 @@ def test_index_writes_recall_chunks_one_per_page_and_one_per_fact(wiki):
     assert recorded[".wiki/chunks.json"] == hashlib.sha256(first).hexdigest()
     build(wiki)
     assert path.read_bytes() == first, "an unchanged wiki rewrites the same bytes"
-
-
-def test_index_refuses_to_overwrite_a_hand_edited_chunks_file(wiki):
-    """chunks.json is guarded exactly like a generated table, unlike index.md."""
+    path.write_text("hand edit\n")
     build(wiki)
-    chunks = wiki / ".wiki" / "chunks.json"
-    chunks.write_text(chunks.read_text() + "hand edit\n")
-    with pytest.raises(SystemExit, match="hand-edited"):
-        build(wiki)
-    build(wiki, force=True)
-    assert "hand edit" not in chunks.read_text()
+    assert path.read_bytes() == first, "recall's copy is rebuilt over a hand edit, never refused"
 
 
 OPERATIONS_SCHEMA = """---

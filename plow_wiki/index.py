@@ -214,12 +214,9 @@ def _outputs(wiki: Path, by_root: dict) -> tuple[dict[Path, str], Regions]:
     """Every file `wiki index` writes, with its new text, and every region it records."""
     index, chunks = paths.contained(wiki, wiki / INDEX), paths.contained(wiki, wiki / CHUNKS)
     files = {index: _render_index(wiki, by_root), chunks: _render_chunks(wiki, by_root)}
-    # No text now for index.md: never guarded, since obsidian-wiki's skills rewrite it. chunks.json
-    # is guarded like a table: a hand edit there is lost silently the moment recall re-embeds it.
-    regions: Regions = {
-        INDEX: (None, files[index]),
-        CHUNKS: (chunks.read_text() if chunks.exists() else None, files[chunks]),
-    }
+    # No prior text: neither is guarded. obsidian-wiki's skills rewrite index.md, and chunks.json
+    # is recall's derived copy of the pages, so a refusal would only fail the nightly.
+    regions: Regions = {INDEX: (None, files[index]), CHUNKS: (None, files[chunks])}
     for root in paths.load_roots(wiki):
         if not (wiki / root).is_dir():
             continue

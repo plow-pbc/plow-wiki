@@ -33,12 +33,8 @@ _HUNK = re.compile(r"^(@{2,}) (?:-\d+(?:,\d+)? )+\+(\d+)(?:,\d+)? @")  # @@, and
 HOUSEKEEPING = (paths.SKIP_DIRS | {".trash", "attachments"}) - {".git"}
 # obsidian-wiki's vault config, which may carry API keys: never scanned, staged or committed.
 ENV = ".env"
-# Rebuilt from pages by `wiki index` and agent recall; history exists to recover pages, and
-# a night's megabytes of base64 vectors would both bloat it and trip the credential scan.
-DERIVED = (".wiki/chunks.json", ".wiki/embeddings.json")
-# Every page but ENV and DERIVED — shared by `add` and `status` so an untracked .env, or a
-# quiet night's derived files, is never a change.
-_PAGES = ("--", ".", *(f":(exclude){p}" for p in (ENV, *DERIVED)))
+# Every page but ENV, shared by `add` and `status` so an untracked .env is never a change.
+_PAGES = ("--", ".", f":(exclude){ENV}")
 
 
 class Snapshot(NamedTuple):
@@ -96,12 +92,7 @@ def _scan_worktree(wiki: Path) -> None:
         rel = path.relative_to(wiki)
         # git stores a symlink as its target path, never the target's bytes: reading through
         # one would scan a file the wiki does not own and will never commit.
-        if (
-            path.is_symlink()
-            or not path.is_file()
-            or ".git" in rel.parts
-            or str(rel) in (ENV, *DERIVED)
-        ):
+        if path.is_symlink() or not path.is_file() or ".git" in rel.parts or str(rel) == ENV:
             continue
         for n, line in enumerate(path.read_bytes().decode("utf-8", "replace").splitlines(), 1):
             if CREDENTIAL.search(line):
@@ -190,8 +181,7 @@ def snapshot(wiki: Path, author: str, push: bool = False) -> Snapshot | None:
         sys.exit(f"--push: {history_dir(wiki)} has no 'origin' remote")
     _ensure_repo(wiki)
     _scan_worktree(wiki)  # a refused credential must never reach the object database
-    # -f: no in-wiki .gitignore may hide a page from history, so only a pathspec leaves
-    # .env and the derived recall files out
+    # -f: no in-wiki .gitignore may hide a page from history, so only a pathspec leaves .env out
     _git(wiki, "add", "-A", "-f", *_PAGES)
     has_head = _git(wiki, "rev-parse", "--verify", "HEAD", check=False).returncode == 0
     if not _git(wiki, "status", "--porcelain", *_PAGES).stdout.strip():

@@ -361,16 +361,3 @@ def test_push_on_a_clean_tree_sends_the_commits_origin_does_not_have(wiki, tmp_p
     with pytest.raises(SystemExit, match="credential"):
         snapshot(wiki, author="a", push=True)
     assert _origin_head(origin) == committed.sha
-
-
-def test_snapshot_neither_scans_nor_commits_the_derived_recall_files(wiki):
-    (wiki / "people" / "jane.md").write_text("---\ntitle: Jane\n---\n- a fact\n")
-    (wiki / ".wiki").mkdir(exist_ok=True)
-    leak = "sk-abcdefghijklmnopqrstuvwxyz"
-    (wiki / ".wiki" / "chunks.json").write_text(f'{{"chunks": ["{leak}"]}}\n')
-    (wiki / ".wiki" / "embeddings.json").write_text(f'{{"vectors": {{"k": "{leak}"}}}}\n')
-    assert snapshot(wiki, author="a").sha
-    committed = _git(wiki, "ls-tree", "-r", "--name-only", "HEAD").splitlines()
-    assert "people/jane.md" in committed
-    assert ".wiki/chunks.json" not in committed and ".wiki/embeddings.json" not in committed
-    assert snapshot(wiki, author="a") is None
