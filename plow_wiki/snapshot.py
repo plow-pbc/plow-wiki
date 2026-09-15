@@ -31,6 +31,9 @@ _HUNK = re.compile(r"^@{2,} (?:-\d+(?:,\d+)? )+\+(\d+)(?:,\d+)? @")  # @@ and a 
 # Top-level folders that are not roots: what a page walk skips, less `.git` (refused outright),
 # plus Obsidian's trash and obsidian-wiki's attachments.
 HOUSEKEEPING = (paths.SKIP_DIRS | {".trash", "attachments"}) - {".git"}
+# obsidian-wiki's vault config, which may carry API keys: never scanned, staged or committed.
+ENV = ".env"
+_ALL_BUT_ENV = ("--", ".", f":(exclude){ENV}")
 
 
 class Snapshot(NamedTuple):
@@ -87,7 +90,7 @@ def _scan_worktree(wiki: Path) -> None:
         rel = path.relative_to(wiki)
         # git stores a symlink as its target path, never the target's bytes: reading through
         # one would scan a file the wiki does not own and will never commit.
-        if path.is_symlink() or not path.is_file() or ".git" in rel.parts:
+        if path.is_symlink() or not path.is_file() or ".git" in rel.parts or rel == Path(ENV):
             continue
         for n, line in enumerate(path.read_bytes().decode("utf-8", "replace").splitlines(), 1):
             if CREDENTIAL.search(line):
@@ -177,9 +180,10 @@ def snapshot(wiki: Path, author: str, push: bool = False) -> Snapshot | None:
         sys.exit(f"--push: {history_dir(wiki)} has no 'origin' remote")
     _ensure_repo(wiki)
     _scan_worktree(wiki)  # a refused credential must never reach the object database
-    _git(wiki, "add", "-A", "-f")  # -f: an in-wiki .gitignore must not hide pages from history
+    # -f: an in-wiki .gitignore must not hide pages from history (and so no ignore rule can hide .env)
+    _git(wiki, "add", "-A", "-f", *_ALL_BUT_ENV)
     has_head = _git(wiki, "rev-parse", "--verify", "HEAD", check=False).returncode == 0
-    if not _git(wiki, "status", "--porcelain").stdout.strip():
+    if not _git(wiki, "status", "--porcelain", *_ALL_BUT_ENV).stdout.strip():
         # A night whose push failed leaves commits behind origin — send them, never no-op.
         if not (push and has_head and _scan_before_push(wiki)):
             return None

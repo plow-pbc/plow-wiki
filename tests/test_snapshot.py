@@ -65,6 +65,16 @@ def test_snapshot_refuses_git_inside_and_undeclared_roots(wiki):
         snapshot(wiki, author="a")
 
 
+def test_env_is_never_scanned_or_committed(wiki):
+    """obsidian-wiki's .env may carry an API key beside the vault path."""
+    env = wiki / ".env"
+    env.write_text(env.read_text() + "WIKI_API_KEY=sk-abcdefghijklmnopqrstuvwxyz\n")
+    (wiki / "people" / "jane.md").write_text("---\ntitle: Jane\n---\n")
+    assert snapshot(wiki, author="a")
+    assert ".env" not in _git(wiki, "log", "--all", "--name-only", "--format=")
+    assert snapshot(wiki, author="a") is None, "an untracked .env is not a change to commit"
+
+
 def test_history_lists_commits_touching_a_page(wiki):
     page = wiki / "people" / "jane.md"
     page.write_text("---\ntitle: Jane\n---\n- one\n")

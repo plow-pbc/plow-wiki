@@ -17,6 +17,7 @@ def test_wiki_help_names_every_subcommand():
 
 def test_init_lays_out_the_wiki(wiki):
     assert (wiki / "AGENTS.md").is_file()
+    assert (wiki / ".env").read_text() == f"OBSIDIAN_VAULT_PATH={wiki.resolve()}\n"
     assert (wiki / "_raw").is_dir()
     roots = tomllib.loads((wiki / "wiki.toml").read_text())["roots"]
     assert set(roots) == {"owner", "people", "orgs"}

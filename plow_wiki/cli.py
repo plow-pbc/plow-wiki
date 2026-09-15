@@ -54,6 +54,8 @@ def cmd_init(args: argparse.Namespace) -> int:
     paths.refuse_git_inside(wiki)
     for name in ("AGENTS.md", "wiki.toml"):
         _write_absent(wiki, wiki / name, _data(name).read_text())
+    # How obsidian-wiki's skills find the vault: they walk up from the cwd to this file.
+    _write_absent(wiki, wiki / snap.ENV, f"OBSIDIAN_VAULT_PATH={wiki}\n")
     (wiki / "_raw").mkdir(exist_ok=True)
     today = datetime.now(UTC).date().isoformat()
     for root in paths.load_roots(wiki):
