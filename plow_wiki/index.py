@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import sys
 import tempfile
 from collections import defaultdict
@@ -17,6 +18,8 @@ from plow_wiki.schema import WIKILINK, load_schema
 
 GENERATED = ".wiki/generated.json"
 INDEX = "index.md"
+CHUNKS = ".wiki/chunks.json"
+_FACT = re.compile(r"^\s*[-*+]\s+(\S.*?)\s*$")
 
 
 def _sha(text: str) -> str:
@@ -34,9 +37,14 @@ def _load_pages(wiki: Path) -> dict[str, list[tuple[Path, dict]]]:
     return by_root
 
 
+def _line(value) -> str:
+    """One line of authored text: no newline forges another."""
+    return " ".join(str(value).split())
+
+
 def _cell(value) -> str:
     """One index line or table cell: no newline forges a row, no `|` breaks one."""
-    return " ".join(str(value).split()).replace("|", r"\|")
+    return _line(value).replace("|", r"\|")
 
 
 def _link(wiki: Path, page: Path, meta: dict, sep: str = "|") -> str:
@@ -115,6 +123,32 @@ def _render_table(wiki: Path, name: str, spec: dict, rows: list[tuple[Path, dict
     return dump(_generated_meta(title, rows), "\n".join(lines))
 
 
+def _render_chunks(wiki: Path, by_root: dict) -> str:
+    """What recall embeds: each page's summary and tags, then each fact bullet, in body order.
+
+    Each chunk carries its root's writer, so recall can keep an agent-owned root to that agent.
+    `by_root` is keyed by the page's declared root, nested ones included, so a nested root's
+    writer is its own — never the top-level folder's."""
+    writers = paths.load_roots(wiki)
+    pages = sorted(
+        ((page, meta, writers[root]) for root, pms in by_root.items() for page, meta in pms),
+        key=lambda pmw: pmw[0].relative_to(wiki),
+    )
+    chunks = []
+    for page, meta, writer in pages:
+        slug = str(page.relative_to(wiki).with_suffix(""))
+        title = _line(meta.get("title", page.stem))
+        tags = " ".join(f"#{t}" for t in meta.get("tags", []))
+        lead = " ".join(part for part in (_line(meta.get("summary", "")), tags) if part)
+        _, body = parse(page.read_text())
+        texts = ([lead] if lead else []) + [
+            m.group(1) for m in map(_FACT.match, body.splitlines()) if m
+        ]
+        chunks += [{"page": slug, "title": title, "writer": writer, "text": t} for t in texts]
+    updated = _generated_meta("", [(page, meta) for page, meta, _ in pages])["updated"]
+    return json.dumps({"updated": updated, "chunks": chunks}, indent=1, ensure_ascii=False) + "\n"
+
+
 def _splice(text: str, section: str, table: list[str], rel: str) -> tuple[str, str, str]:
     """`text` with the lines strictly between the `section` heading and the next `## ` heading
     (or the end) replaced by the table, every other byte kept; and that region, old and new."""
@@ -178,10 +212,11 @@ def _section_tables(wiki: Path, spec: dict, rows: list, files: dict, regions: Re
 
 def _outputs(wiki: Path, by_root: dict) -> tuple[dict[Path, str], Regions]:
     """Every file `wiki index` writes, with its new text, and every region it records."""
-    index = paths.contained(wiki, wiki / INDEX)
-    files = {index: _render_index(wiki, by_root)}
-    # No text now for index.md: never guarded, since obsidian-wiki's skills rewrite it.
-    regions: Regions = {INDEX: (None, files[index])}
+    index, chunks = paths.contained(wiki, wiki / INDEX), paths.contained(wiki, wiki / CHUNKS)
+    files = {index: _render_index(wiki, by_root), chunks: _render_chunks(wiki, by_root)}
+    # No prior text: neither is guarded. obsidian-wiki's skills rewrite index.md, and chunks.json
+    # is recall's derived copy of the pages, so a refusal would only fail the nightly.
+    regions: Regions = {INDEX: (None, files[index]), CHUNKS: (None, files[chunks])}
     for root in paths.load_roots(wiki):
         if not (wiki / root).is_dir():
             continue

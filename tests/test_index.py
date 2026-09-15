@@ -24,13 +24,15 @@ def test_index_lists_every_page_under_its_root_in_obsidian_wikis_entry_format(
     assert lines.index(entry + suffix) > lines.index("## scheduling")
 
 
-def test_index_md_is_rewritten_over_a_hand_edit(sched_wiki):
-    """obsidian-wiki's skills update index.md after every write; a refusal fails every nightly."""
+@pytest.mark.parametrize("name", ["index.md", ".wiki/chunks.json"])
+def test_index_md_is_rewritten_over_a_hand_edit(sched_wiki, name):
+    """obsidian-wiki's skills update index.md after every write, and chunks.json is recall's copy
+    of the pages; a refusal of either would only fail the nightly."""
     build(sched_wiki)
-    index = sched_wiki / "index.md"
-    index.write_text(index.read_text() + "- [[scheduling/new-page]] — added by wiki-ingest\n")
+    target = sched_wiki / name
+    target.write_text(target.read_text() + "- [[scheduling/new-page]] — added by wiki-ingest\n")
     build(sched_wiki)
-    assert "wiki-ingest" not in index.read_text()
+    assert "wiki-ingest" not in target.read_text()
 
 
 def test_table_groups_by_stage_and_sorts_by_due(sched_wiki):
@@ -168,6 +170,75 @@ def test_generated_updated_falls_back_to_today_when_no_page_carries_one(wiki):
     build(wiki)
     meta, _ = parse((wiki / "index.md").read_text())
     assert str(meta["updated"]) == datetime.now(UTC).date().isoformat()
+
+
+def test_index_writes_recall_chunks_one_per_page_and_one_per_fact(wiki):
+    (wiki / "people" / "jane-doe.md").write_text(
+        dump(
+            {
+                "type": "person",
+                "title": "Jane Doe",
+                "summary": "Partner at Example | Ventures.",
+                "category": "people",
+                "tags": ["person", "investor"],
+                "sources": ["email:1"],
+                "created": "2026-09-01",
+                "updated": datetime(2026, 9, 13, 8, 0, tzinfo=UTC),
+            },
+            "- Prefers 30-minute video calls before noon Eastern.\n"
+            "  - Mornings only in winter. ^[inferred]\n"
+            "\n"
+            "Some prose that is not a fact bullet.\n"
+            "* Assistant books her travel.\n"
+            "+ Reads every deck before a first meeting.\n",
+        )
+    )
+    (wiki / "people" / "broken.md").write_text("no frontmatter here\n- a bullet\n")
+    # A nested root (str's layout, #19) with its own, non-shared writer: its chunks must carry
+    # that writer, not "str" — the top-level folder is not itself a declared root at all.
+    (wiki / "wiki.toml").write_text(
+        (wiki / "wiki.toml").read_text() + '[roots."str/operations"]\nwriter = "str"\n'
+    )
+    assert run_wiki("init", str(wiki)).returncode == 0
+    (wiki / "str" / "operations" / "trash.md").write_text(
+        dump(
+            {
+                "title": "Trash",
+                "summary": "Bins go out Monday.",
+                "category": "operations",
+                "tags": ["operations"],
+                "sources": ["obs:1"],
+                "created": "2026-09-01",
+                "updated": "2026-09-01",
+            },
+            "- Bins go out Monday.\n",
+        )
+    )
+    build(wiki)
+    path = wiki / ".wiki" / "chunks.json"
+    first = path.read_bytes()
+    payload = json.loads(first)
+    assert payload["updated"] == "2026-09-13"
+    chunks = payload["chunks"]
+    # The writer is the declared root's, from wiki.toml: recall keeps an agent-owned root to
+    # its agent, nested roots included.
+    assert {(c["page"], c["title"], c["writer"]) for c in chunks} == {
+        ("people/jane-doe", "Jane Doe", "shared"),
+        ("str/operations/trash", "Trash", "str"),
+    }
+    assert [c["text"] for c in chunks] == [
+        "Partner at Example | Ventures. #person #investor",  # authored text, not a table cell
+        "Prefers 30-minute video calls before noon Eastern.",
+        "Mornings only in winter. ^[inferred]",
+        "Assistant books her travel.",
+        "Reads every deck before a first meeting.",
+        "Bins go out Monday. #operations",
+        "Bins go out Monday.",
+    ]
+    recorded = json.loads((wiki / ".wiki" / "generated.json").read_text())
+    assert recorded[".wiki/chunks.json"] == hashlib.sha256(first).hexdigest()
+    build(wiki)
+    assert path.read_bytes() == first, "an unchanged wiki rewrites the same bytes"
 
 
 OPERATIONS_SCHEMA = """---
