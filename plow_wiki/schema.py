@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 import sys
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import datetime
 from pathlib import Path
 
 from plow_wiki.frontmatter import FrontmatterError, parse
@@ -36,10 +36,9 @@ def load_schema(root_dir: Path) -> Schema:
 
 
 def _is_date(value) -> bool:
-    if isinstance(value, date):
-        return True
+    """An ISO date or datetime: obsidian-wiki's page template stamps `created` as `...T10:30:00Z`."""
     try:
-        date.fromisoformat(str(value))
+        datetime.fromisoformat(str(value))  # str(): YAML already parsed an unquoted one
         return True
     except ValueError:
         return False
@@ -62,7 +61,7 @@ def validate_page(meta: dict, schema: Schema, root: str) -> list[str]:
             problems.append(f"{name} is not an allowed value")
         kind = rule.get("type")
         if kind == "date" and not _is_date(value):
-            problems.append(f"{name} must be a date (YYYY-MM-DD)")
+            problems.append(f"{name} must be an ISO date or datetime")
         elif kind == "wikilink" and not (isinstance(value, str) and _WIKILINK.match(value)):
             problems.append(f"{name} must be a [[wikilink]]")
         elif kind == "string" and not isinstance(value, str):

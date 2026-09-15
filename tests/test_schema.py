@@ -1,3 +1,4 @@
+from datetime import date
 from pathlib import Path
 
 import pytest
@@ -36,8 +37,11 @@ def schema(tmp_path: Path):
     return load_schema(tmp_path)
 
 
-def test_valid_page_has_no_problems(schema):
-    assert validate_page(GOOD, schema, "scheduling") == []
+@pytest.mark.parametrize(
+    "due", ["2026-09-16", "2026-09-16T10:30:00Z", "2026-09-16T10:30:00-07:00", date(2026, 9, 16)]
+)
+def test_valid_page_has_no_problems(schema, due):
+    assert validate_page({**GOOD, "due": due}, schema, "scheduling") == []
 
 
 @pytest.mark.parametrize(
@@ -46,7 +50,7 @@ def test_valid_page_has_no_problems(schema):
         ({"state": None}, "missing required field: state"),
         ({"state": "flying"}, "state is not an allowed value"),
         ({"type": "person"}, "type does not match its required constant"),
-        ({"due": "next week"}, "due must be a date"),
+        ({"due": "next week"}, "due must be an ISO date or datetime"),
         ({"org": "Example"}, "org must be a [[wikilink]]"),
         ({"category": "people"}, "category must equal the root"),
         ({"sources": []}, "sources must cite at least one"),
