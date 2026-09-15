@@ -248,6 +248,16 @@ def _hand_edit_the_table(wiki: Path) -> None:
     hub.write_text(hub.read_text().replace("Router in the hall", "Router moved"))
 
 
+def test_a_link_planted_beside_a_hub_cannot_take_its_write(hub_wiki, tmp_path):
+    outside = tmp_path / "outside.txt"
+    outside.write_text("not the wiki's\n")
+    hub = hub_wiki / "str" / "properties" / "casa.md"
+    (hub.parent / ".casa.md.tmp").symlink_to(outside)
+    build(hub_wiki)
+    assert outside.read_text() == "not the wiki's\n"
+    assert not hub.is_symlink() and TABLE in hub.read_text()
+
+
 def test_a_write_that_fails_leaves_the_hand_written_hub_whole(hub_wiki, monkeypatch):
     hub = hub_wiki / "str" / "properties" / "casa.md"
     before = hub.read_text()

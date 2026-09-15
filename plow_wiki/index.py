@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 import sys
+import tempfile
 from collections import defaultdict
 from datetime import UTC, datetime
 from pathlib import Path
@@ -199,9 +200,11 @@ def _outputs(wiki: Path, by_root: dict) -> tuple[dict[Path, str], Regions]:
 
 
 def _replace(path: Path, text: str) -> None:
-    """Whole or not at all: a hub is hand-written, so a write cut short must never truncate it."""
-    tmp = path.with_name(f".{path.name}.tmp")
-    tmp.write_text(text)
+    """Whole or not at all: a hub is hand-written, so a write cut short must never truncate it.
+    The temp file is created exclusively, so no link planted beside the page can take the write."""
+    fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.", suffix=".tmp")
+    with os.fdopen(fd, "w") as f:
+        f.write(text)
     os.replace(tmp, path)
 
 
