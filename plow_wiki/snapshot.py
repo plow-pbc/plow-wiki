@@ -180,7 +180,7 @@ def snapshot(wiki: Path, author: str, push: bool = False) -> Snapshot | None:
         sys.exit(f"--push: {history_dir(wiki)} has no 'origin' remote")
     _ensure_repo(wiki)
     _scan_worktree(wiki)  # a refused credential must never reach the object database
-    # -f: an in-wiki .gitignore must not hide pages from history (and so no ignore rule can hide .env)
+    # -f: no in-wiki .gitignore may hide a page from history, so only a pathspec leaves .env out
     _git(wiki, "add", "-A", "-f", *_ALL_BUT_ENV)
     has_head = _git(wiki, "rev-parse", "--verify", "HEAD", check=False).returncode == 0
     if not _git(wiki, "status", "--porcelain", *_ALL_BUT_ENV).stdout.strip():

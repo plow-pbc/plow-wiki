@@ -50,7 +50,7 @@ def _tags(meta: dict) -> str:
 
 
 def _generated_meta(title: str, rows: list[tuple[Path, dict]]) -> dict:
-    """The keys obsidian-wiki's lint requires; dates span the pages listed, so a day alone churns."""
+    """obsidian-wiki's required keys; dates span the pages listed, so a day alone churns nothing."""
     today = datetime.now(UTC).date().isoformat()
     return {
         "title": title,
@@ -143,15 +143,10 @@ def build(wiki: Path, force: bool = False) -> list[Path]:
     for target in [*targets, *stale]:
         paths.contained(wiki, target)
     if not force:
-        for target in [*targets, *stale]:
+        # index.md is derived, and obsidian-wiki's skills rewrite it after every write: unguarded.
+        for target in [t for t in [*targets, *stale] if t != wiki / INDEX]:
             rel = str(target.relative_to(wiki))
-            # index.md is derived, and obsidian-wiki's skills rewrite it after every write.
-            if (
-                rel != INDEX
-                and target.exists()
-                and rel in recorded
-                and _sha(target) != recorded[rel]
-            ):
+            if target.exists() and rel in recorded and _sha(target) != recorded[rel]:
                 sys.exit(
                     f"{rel} was hand-edited since `wiki index` wrote it; "
                     f"generated files are rebuilt from page frontmatter. Re-run with --force to overwrite."

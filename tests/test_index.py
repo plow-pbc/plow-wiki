@@ -25,7 +25,7 @@ def test_index_lists_every_page_under_its_root_in_obsidian_wikis_entry_format(
 
 
 def test_index_md_is_rewritten_over_a_hand_edit(sched_wiki):
-    """obsidian-wiki's skills update index.md after every write; refusing would fail every nightly."""
+    """obsidian-wiki's skills update index.md after every write; a refusal fails every nightly."""
     build(sched_wiki)
     index = sched_wiki / "index.md"
     index.write_text(index.read_text() + "- [[scheduling/new-page]] — added by wiki-ingest\n")

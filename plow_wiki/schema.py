@@ -41,7 +41,7 @@ def load_schema(wiki: Path, root: str) -> Schema:
 
 
 def _is_date(value) -> bool:
-    """An ISO date or datetime: obsidian-wiki's page template stamps `created` as `...T10:30:00Z`."""
+    """An ISO date or datetime: obsidian-wiki's page template writes `created: ...T10:30:00Z`."""
     try:
         datetime.fromisoformat(str(value))  # str(): YAML already parsed an unquoted one
         return True
