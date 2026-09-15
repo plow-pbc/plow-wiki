@@ -1,8 +1,8 @@
 ---
 root: people
-required: [type, title, summary, category, tags, sources, created, updated]
+required: [title, summary, category, tags, sources, created, updated]
 fields:
-  type: {const: person}
+  type: {const: Person}
   org: {type: wikilink}
   email: {type: string}
   phone: {type: string}
@@ -14,7 +14,7 @@ One page per person, slug `people/<first-last>.md`. Example:
 
 ```yaml
 ---
-type: person
+type: Person
 title: Jane Doe
 summary: Partner at Example Ventures; scheduling through her chief of staff.
 category: people

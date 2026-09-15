@@ -1,8 +1,8 @@
 ---
 root: owner
-required: [type, title, summary, category, tags, sources, created, updated]
+required: [title, summary, category, tags, sources, created, updated]
 fields:
-  type: {const: owner}
+  type: {const: Owner}
 ---
 # owner/
 
@@ -12,7 +12,7 @@ per topic, e.g. `owner/preferences.md`, `owner/calendars.md`. Example:
 
 ```yaml
 ---
-type: owner
+type: Owner
 title: Meeting preferences
 summary: Defaults the owner has stated for how meetings are booked.
 category: owner

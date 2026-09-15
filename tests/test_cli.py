@@ -41,7 +41,7 @@ def test_init_is_idempotent_on_an_existing_wiki(wiki):
 
 def _page(**over):
     base = {
-        "type": "person",
+        "type": "Person",
         "title": "Jane Doe",
         "summary": "s",
         "category": "people",
@@ -67,8 +67,21 @@ def test_validate_reports_bad_pages_by_path(wiki):
     assert "jane-doe" not in result.stdout
 
 
-def test_validate_passes_a_clean_wiki(wiki):
-    (wiki / "people" / "jane-doe.md").write_text(_page())
+@pytest.mark.parametrize(
+    "root, page",
+    [
+        pytest.param("people", _page(), id="type Person under the shipped people schema"),
+        pytest.param(
+            "notes", _page(type=None, category="notes"), id="no type under the base schema"
+        ),
+    ],
+)
+def test_validate_passes_a_clean_wiki(wiki, root, page):
+    (wiki / "wiki.toml").write_text(
+        (wiki / "wiki.toml").read_text() + '[roots.notes]\nwriter = "shared"\n'
+    )
+    assert run_wiki("init", str(wiki)).returncode == 0
+    (wiki / root / "page.md").write_text(page)
     result = run_wiki("validate", "--wiki", str(wiki))
     assert result.returncode == 0
     assert "validated 1 pages" in result.stdout
@@ -77,7 +90,7 @@ def test_validate_passes_a_clean_wiki(wiki):
 SECRET = "sk-abcdefghijklmnopqrstuvwxyz"  # shaped like an API key a person pasted into a page
 
 
-def _leak_schema(const: str = "person", enum: str = "idle") -> str:
+def _leak_schema(const: str = "Person", enum: str = "idle") -> str:
     return f"---\nroot: people\nrequired: [title]\nfields:\n  type: {{const: {const}}}\n  state: {{enum: [{enum}, met]}}\n---\n"
 
 
@@ -89,7 +102,7 @@ def _leak_schema(const: str = "person", enum: str = "idle") -> str:
         pytest.param(
             _leak_schema(), f"---\ntitle: [unclosed\nsecret: {SECRET}\n---\n", id="malformed YAML"
         ),
-        pytest.param(_leak_schema(const=SECRET), _page(type="person"), id="schema const"),
+        pytest.param(_leak_schema(const=SECRET), _page(), id="schema const"),
         pytest.param(_leak_schema(enum=SECRET), _page(state="flying"), id="schema enum"),
     ],
 )

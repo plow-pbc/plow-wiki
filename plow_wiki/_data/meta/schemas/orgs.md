@@ -1,8 +1,8 @@
 ---
 root: orgs
-required: [type, title, summary, category, tags, sources, created, updated]
+required: [title, summary, category, tags, sources, created, updated]
 fields:
-  type: {const: org}
+  type: {const: Organization}
   website: {type: string}
 ---
 # orgs/
@@ -11,7 +11,7 @@ One page per organization, slug `orgs/<name>.md`. Example:
 
 ```yaml
 ---
-type: org
+type: Organization
 title: Example Ventures
 summary: Seed-stage fund; partners take first meetings themselves.
 category: orgs

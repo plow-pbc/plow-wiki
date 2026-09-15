@@ -16,7 +16,7 @@ from plow_wiki.schema import load_schema, schema_path, validate_page
 
 BASE_SCHEMA = """---
 root: {root}
-required: [type, title, summary, category, tags, sources, created, updated]
+required: [title, summary, category, tags, sources, created, updated]
 fields: {{}}
 ---
 # {root}/
