@@ -23,12 +23,12 @@ def _sha(path: Path) -> str:
 
 def _load_pages(wiki: Path) -> dict[str, list[tuple[Path, dict]]]:
     by_root: dict[str, list[tuple[Path, dict]]] = defaultdict(list)
-    for page in paths.iter_pages(wiki):
+    for root, page in paths.iter_pages(wiki):
         try:
             meta, _ = parse(page.read_text())
         except FrontmatterError:
             continue  # validate names it; the index skips it rather than guess
-        by_root[page.relative_to(wiki).parts[0]].append((page, meta))
+        by_root[root].append((page, meta))
     return by_root
 
 

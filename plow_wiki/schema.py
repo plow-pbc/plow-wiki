@@ -51,8 +51,9 @@ def _is_date(value) -> bool:
 
 def validate_page(meta: dict, schema: Schema, root: str) -> list[str]:
     problems = [f"missing required field: {k}" for k in schema.required if k not in meta]
-    if "category" in meta and meta["category"] != root:
-        problems.append(f"category must equal the root ({root})")
+    category = root.rsplit("/", 1)[-1]  # str/operations holds obsidian-wiki's `operations`
+    if "category" in meta and meta["category"] != category:
+        problems.append(f"category must equal the root's last segment ({category})")
     sources = meta.get("sources")
     if "sources" in meta and (not isinstance(sources, list) or not sources):
         problems.append("sources must cite at least one source")

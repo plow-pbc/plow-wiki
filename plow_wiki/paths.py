@@ -47,15 +47,19 @@ def refuse_git_inside(wiki: Path) -> None:
 
 
 def load_roots(wiki: Path) -> dict[str, str]:
-    """`{root: writer}` from wiki.toml. A wiki without one is not a wiki."""
+    """`{root: writer}` from wiki.toml. A wiki without one is not a wiki.
+
+    A root may nest (`[roots."str/operations"]`), but never inside another root: a page must
+    belong to exactly one."""
     toml = wiki / "wiki.toml"
     if not toml.is_file():
         sys.exit(f"{wiki} is not a wiki: no wiki.toml")
-    data = tomllib.loads(toml.read_text())
-    return {
-        safe_segment(name, f"{toml.name}: root {name!r}"): spec["writer"]
-        for name, spec in data.get("roots", {}).items()
-    }
+    roots = tomllib.loads(toml.read_text()).get("roots", {})
+    for name in roots:
+        parts = [safe_segment(part, f"{toml.name}: root {name!r}") for part in name.split("/")]
+        if any("/".join(parts[:i]) in roots for i in range(1, len(parts))):
+            sys.exit(f"{toml.name}: root {name!r} is inside another root; roots must not overlap")
+    return {name: spec["writer"] for name, spec in roots.items()}
 
 
 def contained(wiki: Path, path: Path) -> Path:
@@ -74,8 +78,8 @@ def is_generated(path: Path) -> bool:
     return meta.get("generated") is True
 
 
-def iter_pages(wiki: Path) -> Iterator[Path]:
-    """Every page a human or agent authored, under declared roots only."""
+def iter_pages(wiki: Path) -> Iterator[tuple[str, Path]]:
+    """Every page a human or agent authored, with the declared root it sits in."""
     inside = wiki.resolve()
     for root in load_roots(wiki):
         root_dir = wiki / root
@@ -88,4 +92,4 @@ def iter_pages(wiki: Path) -> Iterator[Path]:
                 continue  # a symlink out of the wiki is not this wiki's page
             if is_generated(path):
                 continue
-            yield path
+            yield root, path

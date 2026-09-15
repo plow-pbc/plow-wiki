@@ -25,6 +25,11 @@ Open `~/Plow/wiki` in Obsidian. Agents reach it through Latch.
 
 `WIKI_PATH` or `--wiki` names the wiki; default `~/Plow/wiki`.
 
+A root in `wiki.toml` may nest, as `[roots."str/operations"]`, but never inside
+another root. Its pages take the last segment as their `category`, its schema
+is `_meta/schemas/str/operations.md`, and `index.md` gives it a
+`## str/operations` section.
+
 ## Agent skills
 
 An agent that uses the wiki needs five skills. One is this repo's
