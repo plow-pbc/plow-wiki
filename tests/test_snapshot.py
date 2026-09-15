@@ -167,6 +167,12 @@ def test_push_requires_origin_then_scans_and_syncs_incrementally(wiki, tmp_path)
             ("line 4",),
             id="a rewrite over existing history",
         ),
+        pytest.param(
+            None,
+            "---\ntitle: L\n---\nguest wrote: \x00 and pasted sk-abcdefghijklmnopqrstuvwxyz\n",
+            ("line 4",),
+            id="a NUL-bearing page",
+        ),
     ],
 )
 def test_the_scan_reads_page_lines_whatever_they_spell(wiki, seed, page, lines):
@@ -232,11 +238,39 @@ def test_history_finds_a_page_when_run_from_inside_the_wiki(wiki, monkeypatch):
     assert sum(ln.endswith(" a") for ln in history(wiki, "people/jane.md")) == 1
 
 
-@pytest.mark.parametrize("name", [".trash", "_archived", ".obsidian"])
-def test_housekeeping_folders_do_not_count_as_undeclared_roots(wiki, name):
-    (wiki / name).mkdir()
-    (wiki / "people" / "jane.md").write_text("---\ntitle: Jane\n---\n")
+@pytest.mark.parametrize(
+    "rel, text",
+    [
+        pytest.param("Untitled.md", "a note Obsidian put at the root\n", id="a top-level file"),
+        *(
+            pytest.param(rel, "x\n", id=rel)
+            for rel in (
+                ".trash/old.md",
+                ".obsidian/app.json",
+                "_archived/old.md",
+                "_archives/old.md",
+                "_meta/taxonomy.md",
+                "_readouts/narration.md",
+                "attachments/photo.png",
+                "_insights.md",
+                ".graph-cache.json",
+                ".manifest.lock",
+                ".manifest.json.4821.tmp",
+            )
+        ),
+        pytest.param(
+            "people/door.md",
+            "Front door code 8823. Lockbox 4471#. Wifi password: sunnyvale2024.\n",
+            id="door codes are not credentials",
+        ),
+        pytest.param("people/nul.md", "guest wrote: \x00 and nothing else\n", id="NUL bytes"),
+    ],
+)
+def test_snapshot_commits_what_is_neither_an_undeclared_folder_nor_a_credential(wiki, rel, text):
+    (wiki / rel).parent.mkdir(exist_ok=True)
+    (wiki / rel).write_text(text)
     assert snapshot(wiki, author="a")
+    assert rel in _git(wiki, "ls-tree", "-r", "--name-only", "HEAD").splitlines()
 
 
 def _head(wiki: Path) -> str:

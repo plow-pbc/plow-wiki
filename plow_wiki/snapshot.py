@@ -28,11 +28,9 @@ _DIFF = (
     "diff.dstPrefix=b/",
 )
 _HUNK = re.compile(r"^@{2,} (?:-\d+(?:,\d+)? )+\+(\d+)(?:,\d+)? @")  # @@ and a merge's @@@
-# Top-level paths that are not roots: what a page walk skips, less `.git` (refused outright),
-# plus the wiki's own files.
-HOUSEKEEPING = (
-    paths.SKIP_DIRS | paths.SKIP_FILES | {"wiki.toml", ".manifest.json", ".DS_Store", ".trash"}
-) - {".git"}
+# Top-level folders that are not roots: what a page walk skips, less `.git` (refused outright),
+# plus Obsidian's trash and obsidian-wiki's attachments.
+HOUSEKEEPING = (paths.SKIP_DIRS | {".trash", "attachments"}) - {".git"}
 
 
 class Snapshot(NamedTuple):
@@ -63,11 +61,12 @@ def _ensure_repo(wiki: Path) -> None:
 
 
 def _refuse_undeclared_roots(wiki: Path) -> None:
+    """Folders only: Obsidian's New note lands a file at the root, and a file is just committed."""
     allowed = set(paths.load_roots(wiki)) | HOUSEKEEPING
     for entry in wiki.iterdir():
-        if entry.name not in allowed:
+        if entry.is_dir() and entry.name not in allowed:
             sys.exit(
-                f"refusing — undeclared top-level path '{entry.name}' is not in wiki.toml. "
+                f"refusing — undeclared top-level folder '{entry.name}' is not in wiki.toml. "
                 "Declare it as a root, or move it out of the wiki."
             )
 
