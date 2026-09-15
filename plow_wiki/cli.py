@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import argparse
 import os
-import shutil
 import sys
+from datetime import UTC, datetime
 from importlib import resources
 from pathlib import Path
 
@@ -13,12 +13,19 @@ from plow_wiki import index as index_mod
 from plow_wiki import paths
 from plow_wiki import snapshot as snap
 from plow_wiki.frontmatter import FrontmatterError, parse
-from plow_wiki.schema import load_schema, validate_page
+from plow_wiki.schema import load_schema, schema_path, validate_page
 
 BASE_SCHEMA = """---
 root: {root}
-required: [type, title, summary, category, tags, sources, created, updated]
+required: [title, summary, category, tags, sources, created, updated]
 fields: {{}}
+# obsidian-wiki's lint reads every .md under _meta as a page, so this file carries its keys:
+title: {root} schema
+category: meta
+tags: [schema]
+sources: []
+created: {today}
+updated: {today}
 ---
 # {root}/
 
@@ -31,6 +38,14 @@ def _data(name: str) -> Path:
     return Path(str(resources.files("plow_wiki") / "_data" / name))
 
 
+def _write_absent(wiki: Path, dest: Path, text: str) -> None:
+    """Install a file only where none exists: the owner may have edited the one that does."""
+    dest = paths.contained(wiki, dest)
+    if not dest.exists():
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_text(text)
+
+
 def cmd_init(args: argparse.Namespace) -> int:
     wiki = Path(args.path).expanduser().resolve()
     if wiki.exists() and not (wiki / "wiki.toml").is_file() and any(wiki.iterdir()):
@@ -38,20 +53,18 @@ def cmd_init(args: argparse.Namespace) -> int:
     wiki.mkdir(parents=True, exist_ok=True)
     paths.refuse_git_inside(wiki)
     for name in ("AGENTS.md", "wiki.toml"):
-        dest = paths.contained(wiki, wiki / name)
-        if not dest.exists():
-            shutil.copy(_data(name), dest)
+        _write_absent(wiki, wiki / name, _data(name).read_text())
+    # How obsidian-wiki's skills find the vault: they walk up from the cwd to this file.
+    _write_absent(wiki, wiki / snap.ENV, f"OBSIDIAN_VAULT_PATH={wiki}\n")
     (wiki / "_raw").mkdir(exist_ok=True)
+    today = datetime.now(UTC).date().isoformat()
     for root in paths.load_roots(wiki):
-        root_dir = paths.contained(wiki, wiki / root)
-        root_dir.mkdir(exist_ok=True)
-        schema = paths.contained(wiki, root_dir / "_schema.md")
-        if schema.exists():
-            continue
-        shipped = _data(f"schemas/{root}/_schema.md")
-        schema.write_text(
-            shipped.read_text() if shipped.is_file() else BASE_SCHEMA.format(root=root)
+        paths.contained(wiki, wiki / root).mkdir(exist_ok=True)
+        shipped = _data(f"meta/schemas/{root}.md")
+        text = (
+            shipped.read_text() if shipped.is_file() else BASE_SCHEMA.format(root=root, today=today)
         )
+        _write_absent(wiki, schema_path(wiki, root), text)
     print(f"initialized {wiki}")
     return 0
 
@@ -59,7 +72,7 @@ def cmd_init(args: argparse.Namespace) -> int:
 def _problems(wiki: Path) -> tuple[list[str], int]:
     """Every validation problem in the wiki, as `path: problem` lines, plus the page count."""
     schemas = {
-        root: load_schema(wiki / root) for root in paths.load_roots(wiki) if (wiki / root).is_dir()
+        root: load_schema(wiki, root) for root in paths.load_roots(wiki) if (wiki / root).is_dir()
     }
     lines, count = [], 0
     for page in paths.iter_pages(wiki):

@@ -1,4 +1,4 @@
-"""index.md and the tables each root's schema declares — generated, never hand-edited."""
+"""index.md and the tables each root's schema declares — generated from page frontmatter."""
 
 from __future__ import annotations
 
@@ -14,6 +14,7 @@ from plow_wiki.frontmatter import FrontmatterError, dump, parse
 from plow_wiki.schema import load_schema
 
 GENERATED = ".wiki/generated.json"
+INDEX = "index.md"
 
 
 def _sha(path: Path) -> str:
@@ -36,18 +37,33 @@ def _cell(value) -> str:
     return " ".join(str(value).split()).replace("|", r"\|")
 
 
-def _link(wiki: Path, page: Path, meta: dict) -> str:
+def _link(wiki: Path, page: Path, meta: dict, sep: str = "|") -> str:
+    """A table cell passes `\\|`: a bare `|` would split the cell the link sits in."""
     target = _cell(page.relative_to(wiki).with_suffix(""))
-    return f"[[{target}|{_cell(meta.get('title', page.stem))}]]"
+    return f"[[{target}{sep}{_cell(meta.get('title', page.stem))}]]"
+
+
+def _tags(meta: dict) -> str:
+    """obsidian-wiki's ` ( #tag1 #tag2)`, which `wiki-query` filters on; nothing for no tags."""
+    tags = " ".join(f"#{_cell(tag)}" for tag in meta.get("tags", []))
+    return f" ( {tags})" if tags else ""
 
 
 def _generated_meta(title: str, rows: list[tuple[Path, dict]]) -> dict:
-    """`updated` is the newest among the pages listed, so a new day alone churns nothing."""
-    updated = max((str(m["updated"]) for _, m in rows if "updated" in m), default="")
+    """obsidian-wiki's required keys; dates span the pages listed, so a day alone churns nothing.
+
+    Compared by calendar day: a datetime's own offset decides its day, and strings of mixed
+    offsets would not order as the instants they name.
+    """
+    today = datetime.now(UTC).date().isoformat()
     return {
         "title": title,
         "generated": True,
-        "updated": updated or datetime.now(UTC).date().isoformat(),
+        "category": "generated",
+        "tags": ["generated"],
+        "sources": [],
+        "created": min((str(m["created"])[:10] for _, m in rows if "created" in m), default=today),
+        "updated": max((str(m["updated"])[:10] for _, m in rows if "updated" in m), default=today),
     }
 
 
@@ -56,7 +72,8 @@ def _render_index(wiki: Path, by_root: dict) -> str:
     for root in paths.load_roots(wiki):
         lines.append(f"## {root}")
         for page, meta in sorted(by_root.get(root, []), key=lambda pm: str(pm[1].get("title", ""))):
-            lines.append(f"- {_link(wiki, page, meta)} — {_cell(meta.get('summary', ''))}")
+            summary = _cell(meta.get("summary", ""))
+            lines.append(f"- {_link(wiki, page, meta)} — {summary}{_tags(meta)}")
         lines.append("")
     listed = [pm for pages in by_root.values() for pm in pages]
     return dump(_generated_meta("Wiki Index", listed), "\n".join(lines))
@@ -81,7 +98,8 @@ def _render_table(wiki: Path, name: str, spec: dict, rows: list[tuple[Path, dict
         lines += ["| " + " | ".join(map(_cell, columns)) + " |", "|" + "---|" * len(columns)]
         for page, meta in members:
             cells = [
-                _link(wiki, page, meta) if c == "title" else _cell(meta.get(c, "")) for c in columns
+                _link(wiki, page, meta, r"\|") if c == "title" else _cell(meta.get(c, ""))
+                for c in columns
             ]
             lines.append("| " + " | ".join(cells) + " |")
         lines.append("")
@@ -91,11 +109,11 @@ def _render_table(wiki: Path, name: str, spec: dict, rows: list[tuple[Path, dict
 
 def _targets(wiki: Path, by_root: dict) -> dict[Path, str]:
     """Every generated file and its new content."""
-    out = {wiki / "index.md": _render_index(wiki, by_root)}
+    out = {wiki / INDEX: _render_index(wiki, by_root)}
     for root in paths.load_roots(wiki):
         if not (wiki / root).is_dir():
             continue
-        for spec in load_schema(wiki / root).tables:
+        for spec in load_schema(wiki, root).tables:
             match = spec.get("match", {})
             rows = [
                 (p, m)
@@ -129,7 +147,8 @@ def build(wiki: Path, force: bool = False) -> list[Path]:
     for target in [*targets, *stale]:
         paths.contained(wiki, target)
     if not force:
-        for target in [*targets, *stale]:
+        # index.md is derived, and obsidian-wiki's skills rewrite it after every write: unguarded.
+        for target in [t for t in [*targets, *stale] if t != wiki / INDEX]:
             rel = str(target.relative_to(wiki))
             if target.exists() and rel in recorded and _sha(target) != recorded[rel]:
                 sys.exit(

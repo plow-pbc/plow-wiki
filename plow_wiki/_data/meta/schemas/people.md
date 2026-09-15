@@ -1,20 +1,28 @@
 ---
 root: people
-required: [type, title, summary, category, tags, sources, created, updated]
+required: [title, summary, category, tags, sources, created, updated]
 fields:
-  type: {const: person}
+  type: {const: Person}
   org: {type: wikilink}
   email: {type: string}
   phone: {type: string}
   timezone: {type: string}
+# obsidian-wiki's lint reads every .md under _meta as a page, so this file carries its keys:
+title: people schema
+category: meta
+tags: [schema]
+sources: []
+created: 2026-09-14
+updated: 2026-09-14
 ---
 # people/
 
-One page per person, slug `people/<first-last>.md`. Example:
+One page per person, slug `people/<first-last>.md`; `org` links the person's
+`orgs/` page. Example:
 
 ```yaml
 ---
-type: person
+type: Person
 title: Jane Doe
 summary: Partner at Example Ventures; scheduling through her chief of staff.
 category: people
@@ -22,7 +30,6 @@ tags: [person, investor]
 sources: ["email:<thread-id>"]
 created: 2026-09-14
 updated: 2026-09-14
-org: "[[orgs/example-ventures]]"
 timezone: America/New_York
 ---
 - Prefers 30-minute video calls before noon Eastern.

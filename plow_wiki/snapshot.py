@@ -27,12 +27,14 @@ _DIFF = (
     "-c",
     "diff.dstPrefix=b/",
 )
-_HUNK = re.compile(r"^@{2,} (?:-\d+(?:,\d+)? )+\+(\d+)(?:,\d+)? @")  # @@ and a merge's @@@
-# Top-level paths that are not roots: what a page walk skips, less the two that are
-# per-root or refused outright, plus the wiki's own files.
-HOUSEKEEPING = (
-    paths.SKIP_DIRS | paths.SKIP_FILES | {"wiki.toml", ".manifest.json", ".DS_Store", ".trash"}
-) - {"_schema.md", ".git"}
+_HUNK = re.compile(r"^(@{2,}) (?:-\d+(?:,\d+)? )+\+(\d+)(?:,\d+)? @")  # @@, and a merge's @@@
+# Top-level folders that are not roots: what a page walk skips, less `.git` (refused outright),
+# plus Obsidian's trash and obsidian-wiki's attachments.
+HOUSEKEEPING = (paths.SKIP_DIRS | {".trash", "attachments"}) - {".git"}
+# obsidian-wiki's vault config, which may carry API keys: never scanned, staged or committed.
+ENV = ".env"
+# Every page but ENV, shared by `add` and `status` so an untracked .env is never a change.
+_PAGES = ("--", ".", f":(exclude){ENV}")
 
 
 class Snapshot(NamedTuple):
@@ -41,7 +43,8 @@ class Snapshot(NamedTuple):
 
 
 def history_dir(wiki: Path) -> Path:
-    return wiki.parent / ".wiki-history.git"
+    """Named for the wiki, so a scratch copy beside it (`wiki-e2e`) never shares its history."""
+    return wiki.parent / f"{wiki.name}.git"
 
 
 def _git(wiki: Path, *args: str, check: bool = True, **env) -> subprocess.CompletedProcess:
@@ -63,11 +66,12 @@ def _ensure_repo(wiki: Path) -> None:
 
 
 def _refuse_undeclared_roots(wiki: Path) -> None:
+    """Folders only: Obsidian's New note lands a file at the root, and a file is just committed."""
     allowed = set(paths.load_roots(wiki)) | HOUSEKEEPING
     for entry in wiki.iterdir():
-        if entry.name not in allowed:
+        if entry.is_dir() and entry.name not in allowed:
             sys.exit(
-                f"refusing — undeclared top-level path '{entry.name}' is not in wiki.toml. "
+                f"refusing — undeclared top-level folder '{entry.name}' is not in wiki.toml. "
                 "Declare it as a root, or move it out of the wiki."
             )
 
@@ -88,7 +92,7 @@ def _scan_worktree(wiki: Path) -> None:
         rel = path.relative_to(wiki)
         # git stores a symlink as its target path, never the target's bytes: reading through
         # one would scan a file the wiki does not own and will never commit.
-        if path.is_symlink() or not path.is_file() or ".git" in rel.parts:
+        if path.is_symlink() or not path.is_file() or ".git" in rel.parts or str(rel) == ENV:
             continue
         for n, line in enumerate(path.read_bytes().decode("utf-8", "replace").splitlines(), 1):
             if CREDENTIAL.search(line):
@@ -99,21 +103,20 @@ def _scan_worktree(wiki: Path) -> None:
 def _scan(diff: str) -> None:
     """Refuse every credential-shaped added line of already-committed history, never the value."""
     hits: list[str] = []
-    current, line, in_hunk = None, 0, False
+    current, line, marks = None, 0, 0  # marks: a hunk line's prefix columns, one per parent
     for raw in diff.splitlines():
         hunk = _HUNK.match(raw)
         if raw.startswith("diff "):  # a new file section: only its own header may name it
-            current, in_hunk = None, False
+            current, marks = None, 0
         elif hunk:
-            line, in_hunk = int(hunk.group(1)), True
-        elif not in_hunk:  # a header or log line — never content, never counted
+            line, marks = int(hunk.group(2)), len(hunk.group(1)) - 1
+        elif not marks:  # a header or log line — never content, never counted
             if raw.startswith("+++ b/"):
                 current = raw[6:]
-        elif raw.startswith("+"):  # inside a hunk every +line is content, whatever it spells
-            if CREDENTIAL.search(raw[1:]):
+        # A `-` in any column: gone from the result (a merge's ` -` too). `\`: "No newline" note.
+        elif "-" not in raw[:marks] and not raw.startswith("\\"):
+            if "+" in raw[:marks] and CREDENTIAL.search(raw[marks:]):  # content, whatever it spells
                 hits.append(f"{current} (line {line})")
-            line += 1
-        elif raw.startswith(" ") or not raw:
             line += 1
     _refuse(hits)
 
@@ -178,9 +181,10 @@ def snapshot(wiki: Path, author: str, push: bool = False) -> Snapshot | None:
         sys.exit(f"--push: {history_dir(wiki)} has no 'origin' remote")
     _ensure_repo(wiki)
     _scan_worktree(wiki)  # a refused credential must never reach the object database
-    _git(wiki, "add", "-A", "-f")  # -f: an in-wiki .gitignore must not hide pages from history
+    # -f: no in-wiki .gitignore may hide a page from history, so only a pathspec leaves .env out
+    _git(wiki, "add", "-A", "-f", *_PAGES)
     has_head = _git(wiki, "rev-parse", "--verify", "HEAD", check=False).returncode == 0
-    if not _git(wiki, "status", "--porcelain").stdout.strip():
+    if not _git(wiki, "status", "--porcelain", *_PAGES).stdout.strip():
         # A night whose push failed leaves commits behind origin — send them, never no-op.
         if not (push and has_head and _scan_before_push(wiki)):
             return None
@@ -193,12 +197,14 @@ def snapshot(wiki: Path, author: str, push: bool = False) -> Snapshot | None:
         "GIT_COMMITTER_NAME": author,
         "GIT_COMMITTER_EMAIL": f"{author}@plow.local",
     }
+    # The pathspec again: an adopted history can arrive with .env already in its index.
     _git(
         wiki,
         "commit",
         "-q",
         "-m",
         f"wiki snapshot {datetime.now(UTC).date().isoformat()}",
+        *_PAGES,
         **identity,
     )
     if push:

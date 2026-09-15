@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 from plow_wiki.snapshot import history, history_dir, snapshot
+from tests.conftest import run_wiki
 
 
 def _git(wiki: Path, *args, cwd: Path | None = None):
@@ -38,6 +39,18 @@ def test_first_snapshot_creates_bare_repo_beside_the_wiki(wiki):
     assert "calendaring" in _git(wiki, "log", "-1", "--format=%an")
 
 
+def test_a_scratch_wiki_beside_the_real_one_never_snapshots_into_its_history(wiki, tmp_path):
+    scratch = tmp_path / "wiki-e2e"
+    assert run_wiki("init", str(scratch)).returncode == 0
+    (scratch / "people" / "fixture.md").write_text("---\ntitle: Fixture\n---\n")
+    snapshot(scratch, author="e2e")
+    (wiki / "people" / "jane.md").write_text("---\ntitle: Jane\n---\n")
+    snapshot(wiki, author="a")
+    assert history_dir(wiki) == tmp_path / "wiki.git"
+    touched = _git(wiki, "log", "--all", "--name-only", "--format=").split()
+    assert "people/jane.md" in touched and "people/fixture.md" not in touched, touched
+
+
 def test_second_identical_snapshot_is_a_noop(wiki):
     (wiki / "people" / "jane.md").write_text("---\ntitle: Jane\n---\n")
     snapshot(wiki, author="a")
@@ -63,6 +76,21 @@ def test_snapshot_refuses_git_inside_and_undeclared_roots(wiki):
     (wiki / ".git").mkdir()
     with pytest.raises(SystemExit, match="must not be a git repo"):
         snapshot(wiki, author="a")
+
+
+def test_env_is_never_scanned_or_committed(wiki):
+    """obsidian-wiki's .env may carry an API key beside the vault path."""
+    env = wiki / ".env"
+    env.write_text(env.read_text() + "WIKI_API_KEY=sk-abcdefghijklmnopqrstuvwxyz\n")
+    (wiki / "people" / "jane.md").write_text("---\ntitle: Jane\n---\n")
+    assert snapshot(wiki, author="a")
+    assert ".env" not in _git(wiki, "log", "--all", "--name-only", "--format=")
+    assert snapshot(wiki, author="a") is None, "an untracked .env is not a change to commit"
+    # An adopted history can already hold .env in its index; the commit still leaves it out.
+    _git(wiki, "--work-tree", str(wiki), "add", "-f", ".env", cwd=wiki)
+    (wiki / "people" / "ann.md").write_text("---\ntitle: Ann\n---\n")
+    assert snapshot(wiki, author="a")
+    assert ".env" not in _git(wiki, "log", "--all", "--name-only", "--format=")
 
 
 def test_history_lists_commits_touching_a_page(wiki):
@@ -167,6 +195,12 @@ def test_push_requires_origin_then_scans_and_syncs_incrementally(wiki, tmp_path)
             ("line 4",),
             id="a rewrite over existing history",
         ),
+        pytest.param(
+            None,
+            "---\ntitle: L\n---\nguest wrote: \x00 and pasted sk-abcdefghijklmnopqrstuvwxyz\n",
+            ("line 4",),
+            id="a NUL-bearing page",
+        ),
     ],
 )
 def test_the_scan_reads_page_lines_whatever_they_spell(wiki, seed, page, lines):
@@ -188,15 +222,38 @@ def test_the_scan_reads_page_lines_whatever_they_spell(wiki, seed, page, lines):
     assert _objects(wiki) == objects, "the credential never reached the object database"
 
 
-def test_first_push_refuses_a_credential_already_in_history(wiki, tmp_path):
+def _committed(wiki: Path, page: Path, text: str) -> None:
+    page.write_text(text)
+    _hand_commit(wiki, "hand")
+
+
+def _merge_resolution(wiki: Path, page: Path, text: str) -> None:
+    """`text` only in a hand-resolved merge, in neither parent: the commit plain `log -p` prints
+    no patch for, and where a conflict fix after a rejected push lands."""
+    ident = ("-c", "user.name=a", "-c", "user.email=a@plow.local")
+
+    def tree(content: str) -> str:
+        page.write_text(content)
+        _git(wiki, "--work-tree", str(wiki), "add", "-A", cwd=wiki)
+        return _git(wiki, "write-tree").strip()
+
+    base = _git(wiki, "rev-parse", "HEAD").strip()
+    _committed(wiki, page, "the version main had\n")
+    side = _git(wiki, *ident, "commit-tree", tree("the other side's\n"), "-p", base, "-m", "side")
+    merge = _git(
+        wiki, *ident, "commit-tree", tree(text), "-p", "HEAD", "-p", side.strip(), "-m", "merge"
+    )
+    _git(wiki, "update-ref", "HEAD", merge.strip())
+
+
+@pytest.mark.parametrize("plant", [_committed, _merge_resolution])
+def test_first_push_refuses_a_credential_already_in_history(wiki, tmp_path, plant):
     (wiki / "people" / "jane.md").write_text("---\ntitle: Jane\n---\n")
     snapshot(wiki, author="a")
 
-    (wiki / "people" / "leak.md").write_text(
-        "---\ntitle: L\n---\n++ sk-abcdefghijklmnopqrstuvwxyz\n"
-    )
-    _hand_commit(wiki, "hand")
-    (wiki / "people" / "leak.md").unlink()  # gone from the worktree; only history still holds it
+    leak = wiki / "people" / "leak.md"
+    plant(wiki, leak, "---\ntitle: L\n---\n++ sk-abcdefghijklmnopqrstuvwxyz\n")
+    leak.unlink()  # gone from the worktree; only history still holds it
 
     origin = tmp_path / "origin.git"
     subprocess.run(["git", "init", "-q", "--bare", str(origin)], check=True)
@@ -232,11 +289,35 @@ def test_history_finds_a_page_when_run_from_inside_the_wiki(wiki, monkeypatch):
     assert sum(ln.endswith(" a") for ln in history(wiki, "people/jane.md")) == 1
 
 
-@pytest.mark.parametrize("name", [".trash", "_archived", ".obsidian"])
-def test_housekeeping_folders_do_not_count_as_undeclared_roots(wiki, name):
-    (wiki / name).mkdir()
-    (wiki / "people" / "jane.md").write_text("---\ntitle: Jane\n---\n")
+@pytest.mark.parametrize(
+    "rel, text",
+    [
+        pytest.param("Untitled.md", "a note Obsidian put at the root\n", id="a top-level file"),
+        *(
+            pytest.param(rel, "x\n", id=rel)
+            for rel in (
+                ".trash/old.md",
+                ".obsidian/app.json",
+                "_archived/old.md",
+                "_archives/old.md",
+                "_meta/taxonomy.md",
+                "_readouts/narration.md",
+                "attachments/photo.png",
+            )
+        ),
+        pytest.param(
+            "people/door.md",
+            "Front door code 8823. Lockbox 4471#. Wifi password: sunnyvale2024.\n",
+            id="door codes are not credentials",
+        ),
+        pytest.param("people/nul.md", "guest wrote: \x00 and nothing else\n", id="NUL bytes"),
+    ],
+)
+def test_snapshot_commits_what_is_neither_an_undeclared_folder_nor_a_credential(wiki, rel, text):
+    (wiki / rel).parent.mkdir(exist_ok=True)
+    (wiki / rel).write_text(text)
     assert snapshot(wiki, author="a")
+    assert rel in _git(wiki, "ls-tree", "-r", "--name-only", "HEAD").splitlines()
 
 
 def _head(wiki: Path) -> str:
@@ -265,7 +346,13 @@ def test_push_on_a_clean_tree_sends_the_commits_origin_does_not_have(wiki, tmp_p
     assert snapshot(wiki, author="a", push=True) == ("pushed", committed.sha)
     assert _origin_head(origin) == committed.sha
 
-    # (d) a credential in an outstanding commit is caught before the clean-tree catch-up push
+    # (d) a quiet night that cannot reach origin fails, never reads as "nothing to snapshot"
+    _git(wiki, "remote", "set-url", "origin", str(tmp_path / "unreachable.git"))
+    with pytest.raises(SystemExit, match="cannot reach origin"):
+        snapshot(wiki, author="a", push=True)
+    _git(wiki, "remote", "set-url", "origin", str(origin))
+
+    # (e) a credential in an outstanding commit is caught before the clean-tree catch-up push
     leak = wiki / "people" / "leak.md"
     leak.write_text("---\ntitle: L\n---\n++ sk-abcdefghijklmnopqrstuvwxyz\n")
     _hand_commit(wiki, "hand")
