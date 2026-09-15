@@ -19,7 +19,7 @@ Open `~/Plow/wiki` in Obsidian. Agents reach it through Latch.
 |---|---|
 | `wiki init <path>` | Creates the wiki: `AGENTS.md`, `wiki.toml`, `_raw/`, one folder per root with its `_schema.md` |
 | `wiki validate` | Checks every page's frontmatter against its root's `_schema.md` |
-| `wiki index` | Regenerates `index.md` and each root's declared tables |
+| `wiki index` | Regenerates `index.md`, each root's declared tables, and `.wiki/chunks.json` (the facts agent recall embeds) |
 | `wiki snapshot` | Commits the wiki into `<parent>/.wiki-history.git` after a credential scan |
 | `wiki history <path>` | Commits touching a page |
 

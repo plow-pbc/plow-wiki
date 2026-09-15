@@ -146,3 +146,54 @@ def test_generated_updated_falls_back_to_today_when_no_page_carries_one(wiki):
     build(wiki)
     meta, _ = parse((wiki / "index.md").read_text())
     assert str(meta["updated"]) == datetime.now(UTC).date().isoformat()
+
+
+def test_index_writes_recall_chunks_one_per_page_and_one_per_fact(wiki):
+    (wiki / "people" / "jane-doe.md").write_text(
+        dump(
+            {
+                "type": "person",
+                "title": "Jane Doe",
+                "summary": "Partner at Example Ventures.",
+                "category": "people",
+                "tags": ["person", "investor"],
+                "sources": ["email:1"],
+                "created": "2026-09-01",
+                "updated": "2026-09-13",
+            },
+            "- Prefers 30-minute video calls before noon Eastern.\n"
+            "  - Mornings only in winter. ^[inferred]\n"
+            "\n"
+            "Some prose that is not a fact bullet.\n"
+            "* Assistant books her travel.\n",
+        )
+    )
+    (wiki / "people" / "broken.md").write_text("no frontmatter here\n- a bullet\n")
+    build(wiki)
+    path = wiki / ".wiki" / "chunks.json"
+    first = path.read_bytes()
+    assert json.loads(first) == {
+        "updated": "2026-09-13",
+        "chunks": [
+            {
+                "page": "people/jane-doe",
+                "title": "Jane Doe",
+                "text": "Partner at Example Ventures. #person #investor",
+            },
+            {
+                "page": "people/jane-doe",
+                "title": "Jane Doe",
+                "text": "Prefers 30-minute video calls before noon Eastern.",
+            },
+            {
+                "page": "people/jane-doe",
+                "title": "Jane Doe",
+                "text": "Mornings only in winter. ^[inferred]",
+            },
+            {"page": "people/jane-doe", "title": "Jane Doe", "text": "Assistant books her travel."},
+        ],
+    }
+    recorded = json.loads((wiki / ".wiki" / "generated.json").read_text())
+    assert recorded[".wiki/chunks.json"] == hashlib.sha256(first).hexdigest()
+    build(wiki)
+    assert path.read_bytes() == first, "an unchanged wiki rewrites the same bytes"

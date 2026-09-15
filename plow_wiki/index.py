@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import sys
 from collections import defaultdict
 from datetime import UTC, datetime
@@ -14,6 +15,8 @@ from plow_wiki.frontmatter import FrontmatterError, dump, parse
 from plow_wiki.schema import load_schema
 
 GENERATED = ".wiki/generated.json"
+CHUNKS = ".wiki/chunks.json"
+_FACT = re.compile(r"^\s*[-*]\s+(\S.*?)\s*$")
 
 
 def _sha(path: Path) -> str:
@@ -89,9 +92,32 @@ def _render_table(wiki: Path, name: str, spec: dict, rows: list[tuple[Path, dict
     return dump(_generated_meta(title, rows), "\n".join(lines))
 
 
+def _render_chunks(wiki: Path, by_root: dict) -> str:
+    """What recall embeds: each page's summary and tags, then each fact bullet, in body order."""
+    pages = sorted(
+        (pm for pms in by_root.values() for pm in pms), key=lambda pm: pm[0].relative_to(wiki)
+    )
+    chunks = []
+    for page, meta in pages:
+        slug = str(page.relative_to(wiki).with_suffix(""))
+        title = _cell(meta.get("title", page.stem))
+        tags = " ".join(f"#{t}" for t in meta.get("tags", []))
+        lead = " ".join(part for part in (_cell(meta.get("summary", "")), tags) if part)
+        _, body = parse(page.read_text())
+        texts = ([lead] if lead else []) + [
+            m.group(1) for m in map(_FACT.match, body.splitlines()) if m
+        ]
+        chunks += [{"page": slug, "title": title, "text": text} for text in texts]
+    updated = _generated_meta("", pages)["updated"]
+    return json.dumps({"updated": updated, "chunks": chunks}, indent=1, ensure_ascii=False) + "\n"
+
+
 def _targets(wiki: Path, by_root: dict) -> dict[Path, str]:
     """Every generated file and its new content."""
-    out = {wiki / "index.md": _render_index(wiki, by_root)}
+    out = {
+        wiki / "index.md": _render_index(wiki, by_root),
+        wiki / CHUNKS: _render_chunks(wiki, by_root),
+    }
     for root in paths.load_roots(wiki):
         if not (wiki / root).is_dir():
             continue
