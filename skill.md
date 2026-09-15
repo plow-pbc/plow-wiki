@@ -12,10 +12,21 @@ you learn.
 
 ## Where it is
 
-`$WIKI_PATH` if set, else `~/Plow/wiki`. Through Latch, read and write pages
-with `plow_read_file` / `plow_write_file` (file operations inside `~/Plow` need
-no approval). Run the CLI with `plow_run_command(["wiki", ...])`. On a mounted
-wiki, use the file tools and the `wiki` command directly.
+`$WIKI_PATH` if set, else `~/Plow/wiki`. On a mounted wiki, use the file tools
+and the `wiki` command directly.
+
+Through Latch, read and write pages with `plow_read_file` / `plow_write_file`
+(file operations inside `~/Plow` need no approval). Run the CLI with
+`plow_run_command`. Latch sandboxes the command, so one that writes must declare
+`write_paths`, or it fails with EPERM:
+
+- `plow_run_command(argv=["wiki", "--wiki", "~/Plow/wiki", "validate"])`
+- `plow_run_command(argv=["wiki", "--wiki", "~/Plow/wiki", "index"], write_paths=["~/Plow/wiki"])`
+- `plow_run_command(argv=["wiki", "--wiki", "~/Plow/wiki", "snapshot", "--author", "<your agent name>"], write_paths=["~/Plow/wiki", "~/Plow/wiki.git"])`
+
+A command that runs long returns `pending` with a handle: poll
+`plow_get_result(handle)` until it is ready, then call `plow_get_output` with
+the handle that result carries, for the exit code and output.
 
 ## Before your first write
 
@@ -41,11 +52,15 @@ add one. Never append a duplicate. Cite the source in `sources:`. Keep
 "update index.md" step in another wiki skill is harmless. Never edit a page
 with `generated: true`: `wiki index` refuses to overwrite one that changed.
 The obsidian-wiki skills (`wiki-query`, `wiki-ingest`, `wiki-lint`,
-`wiki-digest`) apply for the how; this file wins where they differ.
+`wiki-digest`) apply for the how; this file wins where they differ. They ship
+inside the `obsidian-wiki` wheel under `obsidian_wiki/_data/skills/`, and the
+agent image copies them into its skills:
+https://github.com/plow-pbc/plow-wiki#agent-skills
 
 ## Nightly
 
 Whichever agent runs the nightly calls, in order: `wiki validate`,
-`wiki index`, `wiki snapshot`. A page that fails validation is named in the
-digest to the owner, never guessed at. If the wiki was unreachable (the owner's
-Mac asleep), the next digest says so: "no wiki refresh since <date>".
+`wiki index`, `wiki snapshot --author <your agent name>`. A page that fails
+validation is named in the digest to the owner, never guessed at. If the wiki
+was unreachable (the owner's Mac asleep), the next digest says so: "no wiki
+refresh since <date>".
