@@ -14,7 +14,7 @@ on:
     tags: ["v*"]
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build:
@@ -34,7 +34,9 @@ jobs:
       - uses: astral-sh/setup-uv@v6
 
       # Before any credential exists: syncing runs third-party build backends.
-      - run: uv sync --frozen --no-dev --group build
+      # uv's own CPython, pinned: the runner's Homebrew 3.14 framework made
+      # every call ~3.4 s instead of ~0.6 s and bundled dylibs requiring macOS 15.
+      - run: uv sync --frozen --no-dev --group build --managed-python --python 3.13
 
       - name: Load signing certificate from 1Password
         uses: 1password/load-secrets-action@v2
@@ -97,6 +99,8 @@ jobs:
   publish:
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/download-artifact@v4
         with:
