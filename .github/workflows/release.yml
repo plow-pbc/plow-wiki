@@ -1,0 +1,112 @@
+name: Release
+
+# A v* tag publishes a self-contained `wiki` for each macOS architecture, in the
+# shape Latch pins under a plugin manifest's runtime.binaries:
+# https://github.com/plow-pbc/plow-wiki/issues/21
+#
+# Setup this workflow assumes: a "release" environment whose deployment policy
+# admits only v* tags, holding OP_SERVICE_ACCOUNT_TOKEN for the 1Password
+# service account that reads "GitHub Actions Release Secrets" (the same
+# Developer ID certificate Latch signs with).
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - runner: macos-15
+            arch: arm64
+          # GitHub's last Intel image; it retires in August 2027.
+          - runner: macos-15-intel
+            arch: amd64
+    runs-on: ${{ matrix.runner }}
+    environment: release
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+
+      # Before any credential exists: syncing runs third-party build backends.
+      - run: uv sync --frozen --no-dev --group build
+
+      - name: Load signing certificate from 1Password
+        uses: 1password/load-secrets-action@v2
+        with:
+          export-env: true
+        env:
+          OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
+          APPLE_CERTIFICATE_P12_BASE64: op://terraform/GitHub Actions Release Secrets/APPLE_CERTIFICATE_P12_BASE64
+          APPLE_CERTIFICATE_PASSWORD: op://terraform/GitHub Actions Release Secrets/APPLE_CERTIFICATE_PASSWORD  # pragma: allowlist secret
+
+      - name: Import code signing certificate
+        run: |
+          KEYCHAIN_PATH=$RUNNER_TEMP/signing.keychain-db
+          KEYCHAIN_PASSWORD=$(openssl rand -base64 32)
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+          CERT_PATH=$RUNNER_TEMP/cert.p12
+          echo "$APPLE_CERTIFICATE_P12_BASE64" | base64 --decode > "$CERT_PATH"
+          security import "$CERT_PATH" \
+            -P "$APPLE_CERTIFICATE_PASSWORD" \
+            -A \
+            -t cert \
+            -f pkcs12 \
+            -k "$KEYCHAIN_PATH"
+          rm "$CERT_PATH"
+
+          security list-keychain -d user -s "$KEYCHAIN_PATH" login.keychain-db
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+      # A onefile binary unpacks libpython and loads it at run time. Under the
+      # hardened runtime Latch signs with, that library loads only when it
+      # carries the same Team ID, and PyInstaller can sign it only while
+      # building.
+      - name: Build
+        run: >-
+          uv run --no-sync pyinstaller --onefile --name wiki
+          --collect-data plow_wiki
+          --codesign-identity "Developer ID Application: The Plow Collective, Inc (3559PD337Z)"
+          plow_wiki/cli.py
+
+      - name: Smoke test with no Python on PATH
+        run: |
+          wiki() { env -i HOME="$RUNNER_TEMP" PATH=/usr/bin:/bin WIKI_PATH="$RUNNER_TEMP/wiki" dist/wiki "$@"; }
+          wiki init "$RUNNER_TEMP/wiki"
+          wiki validate
+          wiki index
+          codesign -dv dist/wiki 2>&1 | grep -x 'TeamIdentifier=3559PD337Z'
+
+      - name: Package
+        run: tar -czf "wiki_${GITHUB_REF_NAME#v}_darwin_${{ matrix.arch }}.tar.gz" -C dist wiki
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wiki-${{ matrix.arch }}
+          path: wiki_*.tar.gz
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+
+      - run: sha256sum wiki_*.tar.gz > checksums.txt
+
+      - run: >-
+          gh release create "$GITHUB_REF_NAME" wiki_*.tar.gz checksums.txt
+          --repo "$GITHUB_REPOSITORY" --title "$GITHUB_REF_NAME"
+          --prerelease=${{ contains(github.ref_name, '-') }}
+        env:
+          GH_TOKEN: ${{ github.token }}

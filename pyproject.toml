@@ -12,6 +12,7 @@ wiki = "plow_wiki.cli:main"
 
 [dependency-groups]
 dev = ["pytest>=8.4", "ruff>=0.6"]
+build = ["pyinstaller>=6.22"]
 
 [build-system]
 requires = ["hatchling"]
