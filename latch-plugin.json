@@ -3,12 +3,14 @@
   "version": "1",
   "command": "wiki",
   "runtime": {
-    "sources": [
+    "binaries": [
       {
-        "name": "plow-wiki",
-        "git": "https://github.com/plow-pbc/plow-wiki",
-        "commit": "<sha>",
-        "install": ["uv", "sync", "--frozen"]
+        "name": "wiki",
+        "url": {
+          "arm64": "https://github.com/plow-pbc/plow-wiki/releases/download/v<ver>/wiki_<ver>_darwin_arm64.tar.gz",
+          "x64": "https://github.com/plow-pbc/plow-wiki/releases/download/v<ver>/wiki_<ver>_darwin_amd64.tar.gz"
+        },
+        "sha256": { "arm64": "<sha256>", "x64": "<sha256>" }
       }
     ]
   },

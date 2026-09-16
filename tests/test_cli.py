@@ -7,6 +7,8 @@ from obsidian_wiki.lint import lint_vault
 
 from tests.conftest import REPO, run_wiki
 
+RELEASE = "https://github.com/plow-pbc/plow-wiki/releases/download/v<ver>/"
+
 
 def test_wiki_help_names_every_subcommand():
     result = run_wiki("--help")
@@ -154,6 +156,12 @@ def test_latch_manifest_matches_the_cli():
     argv = {bucket: {tuple(a) for a in cmds} for bucket, cmds in manifest["argv"].items()}
     assert argv["read"] == {("validate",), ("history",)}  # a command that writes is not a read
     assert argv["write"] == {("init",), ("index",), ("snapshot",)}
+    (binary,) = manifest["runtime"]["binaries"]
+    assert binary["name"] == "wiki"
+    assert binary["url"] == {
+        "arm64": RELEASE + "wiki_<ver>_darwin_arm64.tar.gz",
+        "x64": RELEASE + "wiki_<ver>_darwin_amd64.tar.gz",
+    }
 
 
 @pytest.mark.parametrize(

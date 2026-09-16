@@ -11,7 +11,16 @@ uv tool install plow-wiki
 wiki init ~/Plow/wiki
 ```
 
-Open `~/Plow/wiki` in Obsidian. Agents reach it through Latch.
+Open `~/Plow/wiki` in Obsidian. Agents reach it through Latch, which stages a
+released binary rather than this package.
+
+## Releases
+
+Pushing a `v<ver>` tag publishes `wiki_<ver>_darwin_arm64.tar.gz` and
+`wiki_<ver>_darwin_amd64.tar.gz`. Each holds one self-contained `wiki`, signed
+with Plow's Developer ID, that needs no Python on the Mac. `checksums.txt`
+carries their sha256 digests, which `latch-plugin.json`'s placeholders take. A
+tag with a `-` (`v0.2.0-rc.1`) publishes a prerelease.
 
 ## Commands
 
