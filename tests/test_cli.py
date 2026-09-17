@@ -9,6 +9,9 @@ from tests.conftest import REPO, run_wiki
 
 RELEASE = "https://github.com/plow-pbc/plow-wiki/releases/download/v<ver>/"
 
+CATEGORIES = ("concepts", "skills", "references", "synthesis", "journal")
+ENTITY_ROOTS = ("entities/people", "entities/orgs", "entities/owner")
+
 
 def test_wiki_help_names_every_subcommand():
     result = run_wiki("--help")
@@ -18,14 +21,25 @@ def test_wiki_help_names_every_subcommand():
 
 
 def test_init_lays_out_the_wiki(wiki):
-    assert (wiki / "AGENTS.md").is_file()
-    assert (wiki / ".env").read_text() == f"OBSIDIAN_VAULT_PATH={wiki.resolve()}\n"
+    assert (wiki / "AGENTS.md").is_file() and (wiki / "log.md").read_text() == "# Log\n"
+    assert (wiki / ".env").read_text() == (
+        f"OBSIDIAN_VAULT_PATH={wiki.resolve()}\nOBSIDIAN_LINK_FORMAT=markdown\n"
+    )
     assert (wiki / "_raw").is_dir()
     roots = tomllib.loads((wiki / "wiki.toml").read_text())["roots"]
-    assert set(roots) == {"owner", "people", "orgs"}
+    assert set(roots) == set(ENTITY_ROOTS) | set(CATEGORIES)
     for root in roots:
         assert (wiki / root).is_dir()
         assert (wiki / "_meta" / "schemas" / f"{root}.md").is_file()
+    assert "entities" not in roots  # the category folder holds roots; it is not one
+
+
+def test_shipped_policy_and_schemas_carry_an_okf_type(wiki):
+    from plow_wiki.frontmatter import parse
+
+    assert parse((wiki / "AGENTS.md").read_text())[0]["type"] == "Policy"
+    for root in ENTITY_ROOTS + CATEGORIES:
+        assert parse((wiki / "_meta" / "schemas" / f"{root}.md").read_text())[0]["type"] == "Schema"
 
 
 def test_init_refuses_a_non_wiki_directory(tmp_path):
@@ -47,10 +61,10 @@ def _page(**over):
     base = {
         "type": "Person",
         "title": "Jane Doe",
-        "summary": "s",
-        "category": "people",
+        "description": "s",
+        "category": "entities",
         "tags": ["person"],
-        "sources": ["email:1"],
+        "sources": [{"resource": "email:1"}],
         "created": "2026-09-14",
         "updated": "2026-09-14",
     }
@@ -61,20 +75,20 @@ def _page(**over):
 
 
 def test_validate_reports_bad_pages_by_path(wiki):
-    (wiki / "people" / "jane-doe.md").write_text(_page())
-    (wiki / "people" / "bad.md").write_text(_page(type="org"))
-    (wiki / "people" / "empty.md").write_text(_page(summary=None))
+    (wiki / "entities" / "people" / "jane-doe.md").write_text(_page())
+    (wiki / "entities" / "people" / "bad.md").write_text(_page(type="org"))
+    (wiki / "entities" / "people" / "empty.md").write_text(_page(description=None))
     result = run_wiki("validate", "--wiki", str(wiki))
     assert result.returncode == 1
-    assert "people/bad.md: type does not match its required constant" in result.stdout
-    assert "people/empty.md: missing required field: summary" in result.stdout
+    assert "entities/people/bad.md: type does not match its required constant" in result.stdout
+    assert "entities/people/empty.md: missing required field: description" in result.stdout
     assert "jane-doe" not in result.stdout
 
 
 @pytest.mark.parametrize(
     "root, page",
     [
-        pytest.param("people", _page(), id="type Person under the shipped people schema"),
+        pytest.param("entities/people", _page(), id="type Person under the shipped people schema"),
         pytest.param(
             "notes", _page(type=None, category="notes"), id="no type under the base schema"
         ),
@@ -95,7 +109,7 @@ SECRET = "sk-abcdefghijklmnopqrstuvwxyz"  # shaped like an API key a person past
 
 
 def _leak_schema(const: str = "Person", enum: str = "idle") -> str:
-    return f"---\nroot: people\nrequired: [title]\nfields:\n  type: {{const: {const}}}\n  state: {{enum: [{enum}, met]}}\n---\n"
+    return f"---\nroot: entities/people\nrequired: [title]\nfields:\n  type: {{const: {const}}}\n  state: {{enum: [{enum}, met]}}\n---\n"
 
 
 @pytest.mark.parametrize(
@@ -111,24 +125,27 @@ def _leak_schema(const: str = "Person", enum: str = "idle") -> str:
     ],
 )
 def test_validate_names_the_problem_and_never_echoes_the_value(wiki, schema, page):
-    (wiki / "_meta" / "schemas" / "people.md").write_text(schema)
-    (wiki / "people" / "leak.md").write_text(page)
+    (wiki / "_meta" / "schemas" / "entities" / "people.md").write_text(schema)
+    (wiki / "entities" / "people" / "leak.md").write_text(page)
     result = run_wiki("validate", "--wiki", str(wiki))
     assert result.returncode == 1
-    assert "people/leak.md" in result.stdout
+    assert "entities/people/leak.md" in result.stdout
     assert SECRET not in result.stdout + result.stderr
 
 
 def test_index_prints_what_it_wrote(wiki):
-    (wiki / "people" / "jane-doe.md").write_text(_page())
+    (wiki / "entities" / "people" / "jane-doe.md").write_text(_page())
     result = run_wiki("index", "--wiki", str(wiki))
     assert result.returncode == 0
     assert "index.md" in result.stdout
-    assert "[[people/jane-doe|Jane Doe]]" in (wiki / "index.md").read_text()
+    assert (
+        "- [Jane Doe](/entities/people/jane-doe.md) — s ( #person)"
+        in (wiki / "index.md").read_text()
+    )
 
 
 def test_snapshot_cli_reports_sha_then_nothing(wiki):
-    (wiki / "people" / "jane-doe.md").write_text(_page())
+    (wiki / "entities" / "people" / "jane-doe.md").write_text(_page())
     first = run_wiki("snapshot", "--wiki", str(wiki), "--author", "calendaring")
     assert first.returncode == 0 and first.stdout.startswith("snapshot ")
     second = run_wiki("snapshot", "--wiki", str(wiki), "--author", "calendaring")
@@ -147,6 +164,7 @@ def test_nightly_end_to_end(sched_wiki):
     assert "calendaring" in hist.stdout
     findings = lint_vault(sched_wiki)["findings"]  # plow-wiki's own files pass obsidian-wiki's lint
     assert findings["missing_frontmatter"] == findings["broken_links"] == [], findings
+    assert findings["machine_path_sources"] == [], findings
 
 
 def test_latch_manifest_matches_the_cli():
@@ -191,32 +209,33 @@ def test_init_refuses_a_bad_root_and_creates_nothing_outside_the_wiki(tmp_path, 
 
 def test_a_nested_root_validates_indexes_and_snapshots(wiki):
     (wiki / "wiki.toml").write_text(
-        (wiki / "wiki.toml").read_text() + '[roots."str/operations"]\nwriter = "str"\n'
+        (wiki / "wiki.toml").read_text() + '[roots."projects/str"]\nwriter = "str"\n'
     )
     assert run_wiki("init", str(wiki)).returncode == 0
-    assert (wiki / "_meta" / "schemas" / "str" / "operations.md").is_file()
-    ops = wiki / "str" / "operations"
-    (ops / "casa-wifi.md").write_text(_page(type=None, title="Casa wifi", category="operations"))
-    (ops / "bad.md").write_text(_page(type=None, category="str/operations"))
+    assert (wiki / "_meta" / "schemas" / "projects" / "str.md").is_file()
+    ops = wiki / "projects" / "str" / "operations"
+    ops.mkdir(parents=True)
+    (ops / "casa-wifi.md").write_text(_page(type=None, title="Casa wifi", category="projects"))
+    (ops / "bad.md").write_text(_page(type=None, category="operations"))
     result = run_wiki("validate", "--wiki", str(wiki))
     assert result.stdout.splitlines() == [
-        "str/operations/bad.md: category must equal the root's last segment (operations)"
+        "projects/str/operations/bad.md: category must equal the root's top-level folder (projects)"
     ]
     (ops / "bad.md").unlink()
     for cmd in (["validate"], ["index"], ["snapshot", "--author", "str"]):
         result = run_wiki("--wiki", str(wiki), *cmd)
         assert result.returncode == 0, (cmd, result.stdout, result.stderr)
     index = (wiki / "index.md").read_text()
-    assert index.index("- [[str/operations/casa-wifi|Casa wifi]]") > index.index(
-        "## str/operations"
+    assert index.index("- [Casa wifi](/projects/str/operations/casa-wifi.md)") > index.index(
+        "## projects/str"
     )
 
 
 def test_a_page_symlinked_out_of_the_wiki_is_neither_indexed_nor_validated(wiki, tmp_path):
     outside = tmp_path / "outside.md"
     outside.write_text(_page(title="Outside Page"))
-    (wiki / "people" / "outside.md").symlink_to(outside)
-    (wiki / "people" / "jane-doe.md").write_text(_page())
+    (wiki / "entities" / "people" / "outside.md").symlink_to(outside)
+    (wiki / "entities" / "people" / "jane-doe.md").write_text(_page())
     assert run_wiki("index", "--wiki", str(wiki)).returncode == 0
     assert "Outside Page" not in (wiki / "index.md").read_text()
     result = run_wiki("validate", "--wiki", str(wiki))
@@ -253,7 +272,7 @@ def test_index_refuses_a_generated_record_symlinked_out_of_the_wiki(wiki, tmp_pa
     outside = tmp_path / "outside"
     outside.mkdir()
     (wiki / ".wiki").symlink_to(outside)
-    (wiki / "people" / "jane-doe.md").write_text(_page())
+    (wiki / "entities" / "people" / "jane-doe.md").write_text(_page())
     result = run_wiki("index", "--wiki", str(wiki))
     assert result.returncode == 1
     assert "outside the wiki" in result.stderr
@@ -265,7 +284,7 @@ def test_index_refuses_a_generated_record_symlinked_out_of_the_wiki(wiki, tmp_pa
 def test_the_wiki_flag_resolves_the_same_wiki_before_or_after_the_subcommand(
     wiki, tmp_path, flag_first
 ):
-    (wiki / "people" / "jane-doe.md").write_text(_page())
+    (wiki / "entities" / "people" / "jane-doe.md").write_text(_page())
     argv = ("--wiki", str(wiki), "validate") if flag_first else ("validate", "--wiki", str(wiki))
     result = run_wiki(*argv, env={**os.environ, "WIKI_PATH": str(tmp_path / "decoy")})
     assert result.returncode == 0, result.stderr
@@ -273,10 +292,13 @@ def test_the_wiki_flag_resolves_the_same_wiki_before_or_after_the_subcommand(
 
 
 def test_validate_names_a_root_that_has_no_schema(wiki):
-    (wiki / "_meta" / "schemas" / "people.md").unlink()
+    (wiki / "_meta" / "schemas" / "entities" / "people.md").unlink()
     result = run_wiki("validate", "--wiki", str(wiki))
     assert result.returncode == 1
-    assert "people has no schema: _meta/schemas/people.md is missing" in result.stderr
+    assert (
+        "entities/people has no schema: _meta/schemas/entities/people.md is missing"
+        in result.stderr
+    )
 
 
 def test_gitignore_keeps_review_artifacts_and_build_output_out_of_the_sdist():

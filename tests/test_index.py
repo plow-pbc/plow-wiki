@@ -181,13 +181,13 @@ def test_generated_updated_falls_back_to_today_when_no_page_carries_one(wiki):
 
 
 def test_index_writes_recall_chunks_one_per_page_and_one_per_fact(wiki):
-    (wiki / "people" / "jane-doe.md").write_text(
+    (wiki / "entities" / "people" / "jane-doe.md").write_text(
         dump(
             {
                 "type": "person",
                 "title": "Jane Doe",
                 "description": "Partner at Example | Ventures.",
-                "category": "people",
+                "category": "entities",
                 "tags": ["person", "investor"],
                 "sources": ["email:1"],
                 "created": "2026-09-01",
@@ -201,7 +201,7 @@ def test_index_writes_recall_chunks_one_per_page_and_one_per_fact(wiki):
             "+ Reads every deck before a first meeting.\n",
         )
     )
-    (wiki / "people" / "broken.md").write_text("no frontmatter here\n- a bullet\n")
+    (wiki / "entities" / "people" / "broken.md").write_text("no frontmatter here\n- a bullet\n")
     # A nested root (str's layout, #19) with its own, non-shared writer: its chunks must carry
     # that writer, not "str" — the top-level folder is not itself a declared root at all.
     (wiki / "wiki.toml").write_text(
@@ -231,7 +231,7 @@ def test_index_writes_recall_chunks_one_per_page_and_one_per_fact(wiki):
     # The writer is the declared root's, from wiki.toml: recall keeps an agent-owned root to
     # its agent, nested roots included.
     assert {(c["page"], c["title"], c["writer"]) for c in chunks} == {
-        ("people/jane-doe", "Jane Doe", "shared"),
+        ("entities/people/jane-doe", "Jane Doe", "shared"),
         ("str/operations/trash", "Trash", "str"),
     }
     assert [c["text"] for c in chunks] == [

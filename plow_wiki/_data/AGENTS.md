@@ -1,4 +1,5 @@
 ---
+type: Policy
 # obsidian-wiki's lint reads every .md at the wiki root as a page, so this file carries its keys:
 title: Curation policy
 category: meta
@@ -9,11 +10,21 @@ updated: 2026-09-14
 ---
 # Wiki — curation policy
 
+## Format
+
+This vault is an OKF v0.2 bundle (spec:
+`https://github.com/GoogleCloudPlatform/open-knowledge-format/blob/main/SPEC.md`) laid out the
+way [obsidian-wiki](https://github.com/Ar9av/obsidian-wiki) expects: links are Markdown pointing
+at a bundle-absolute path ending `.md`, every page carries `type`, `index.md` and `log.md` are
+reserved.
+
 This folder is a wiki of durable facts, opened in Obsidian by its owner and
 written by agents and humans alike. `wiki.toml` lists its roots and who
 writes each; `_meta/schemas/<root>.md` says what a page in that root must carry.
-`wiki index` rebuilds `index.md` and every page marked `generated: true` from
-page frontmatter; do not edit a generated page by hand.
+Roots sit under obsidian-wiki's categories; `category` is the top-level folder
+(`entities`, `projects`, …). `wiki index` rebuilds `index.md` and every page
+marked `generated: true` from page frontmatter; do not edit a generated page
+by hand.
 
 ## What belongs here
 
@@ -39,8 +50,9 @@ put the leftover uncertainty in its own bullet, and say what separates them.
 disagree or are vague). An unmarked bullet is a promise an agent may repeat
 verbatim; a marked one must be verified first.
 
-**Cite every source** in the page's `sources:` frontmatter — an email thread id,
-a Plow message uid, a calendar event id, a URL. Never a `_raw/` path.
+**Cite every source** in the page's `sources:` frontmatter — entries are
+`{resource: <id or URL>}`: an email thread id, a Plow message uid, a calendar
+event id, a URL. Never a `_raw/` path or any filesystem path.
 
 ## Never write
 

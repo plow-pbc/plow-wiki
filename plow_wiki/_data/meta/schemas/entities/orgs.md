@@ -1,6 +1,7 @@
 ---
-root: orgs
-required: [title, summary, category, tags, sources, created, updated]
+type: Schema
+root: entities/orgs
+required: [title, description, category, tags, sources, created, updated]
 fields:
   type: {const: Organization}
   website: {type: string}
@@ -12,18 +13,18 @@ sources: []
 created: 2026-09-14
 updated: 2026-09-14
 ---
-# orgs/
+# entities/orgs/
 
-One page per organization, slug `orgs/<name>.md`. Example:
+One page per organization, slug `entities/orgs/<name>.md`. Example:
 
 ```yaml
 ---
 type: Organization
 title: Example Ventures
-summary: Seed-stage fund; partners take first meetings themselves.
-category: orgs
+description: Seed-stage fund; partners take first meetings themselves.
+category: entities
 tags: [org, investor]
-sources: ["https://example.com/about"]
+sources: [{resource: "https://example.com/about"}]
 created: 2026-09-14
 updated: 2026-09-14
 ---

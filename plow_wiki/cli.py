@@ -16,8 +16,9 @@ from plow_wiki.frontmatter import FrontmatterError, parse
 from plow_wiki.schema import load_schema, schema_path, validate_page
 
 BASE_SCHEMA = """---
+type: Schema
 root: {root}
-required: [title, summary, category, tags, sources, created, updated]
+required: [title, description, category, tags, sources, created, updated]
 fields: {{}}
 # obsidian-wiki's lint reads every .md under _meta as a page, so this file carries its keys:
 title: {root} schema
@@ -54,8 +55,11 @@ def cmd_init(args: argparse.Namespace) -> int:
     paths.refuse_git_inside(wiki)
     for name in ("AGENTS.md", "wiki.toml"):
         _write_absent(wiki, wiki / name, _data(name).read_text())
-    # How obsidian-wiki's skills find the vault: they walk up from the cwd to this file.
-    _write_absent(wiki, wiki / snap.ENV, f"OBSIDIAN_VAULT_PATH={wiki}\n")
+    # How obsidian-wiki's skills find the vault, and the link form they write (OKF's).
+    _write_absent(
+        wiki, wiki / snap.ENV, f"OBSIDIAN_VAULT_PATH={wiki}\nOBSIDIAN_LINK_FORMAT=markdown\n"
+    )
+    _write_absent(wiki, wiki / "log.md", "# Log\n")  # OKF's reserved log; obsidian-wiki appends
     (wiki / "_raw").mkdir(exist_ok=True)
     today = datetime.now(UTC).date().isoformat()
     for root in paths.load_roots(wiki):

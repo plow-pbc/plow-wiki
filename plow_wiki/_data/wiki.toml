@@ -1,10 +1,22 @@
 # The wiki's roots and who may write them. "shared" means any agent, reading the
-# page first and folding into it. Anything else is exactly one agent name. A
-# root may nest ([roots."str/operations"]) but never inside another root.
-# `wiki snapshot` refuses a top-level folder that no root starts with.
-[roots.owner]
+# page first and folding into it. Anything else is exactly one agent name. Roots
+# sit under obsidian-wiki's categories (entities, concepts, skills,
+# references, synthesis, journal, projects). A root may nest
+# ([roots."projects/str"]) but never inside another root. `wiki snapshot`
+# refuses a top-level folder that no root starts with.
+[roots."entities/people"]
 writer = "shared"
-[roots.people]
+[roots."entities/orgs"]
 writer = "shared"
-[roots.orgs]
+[roots."entities/owner"]
+writer = "shared"
+[roots.concepts]
+writer = "shared"
+[roots.skills]
+writer = "shared"
+[roots.references]
+writer = "shared"
+[roots.synthesis]
+writer = "shared"
+[roots.journal]
 writer = "shared"
