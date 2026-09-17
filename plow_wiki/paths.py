@@ -68,7 +68,7 @@ def is_generated(path: Path) -> bool:
         meta, _ = parse(path.read_text())
     except (FrontmatterError, OSError):
         return False
-    return meta.get("generated") is True
+    return "generated_by" in meta or meta.get("generated") is True  # `generated: true`: a 0.1 vault
 
 
 def iter_pages(wiki: Path) -> Iterator[tuple[str, Path]]:
