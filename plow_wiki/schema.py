@@ -11,6 +11,17 @@ from pathlib import Path
 from plow_wiki.frontmatter import FrontmatterError, parse
 
 WIKILINK = re.compile(r"\[\[([^\]|]+)(?:\|[^\]]*)?\]\]")  # [[path]] or [[path|alias]]; fullmatch
+MDLINK = re.compile(
+    r"\[[^\]]*\]\(/?([^)]+?)\.md\)"
+)  # [text](/path.md) — OKF's bundle-absolute form
+
+
+def LINK_TARGET(value) -> str | None:
+    """The wiki-relative page path (no `.md`) a link field names, in either form; else None."""
+    if not isinstance(value, str):
+        return None
+    match = MDLINK.fullmatch(value) or WIKILINK.fullmatch(value)
+    return match.group(1) if match else None
 
 
 @dataclass
@@ -51,12 +62,16 @@ def _is_date(value) -> bool:
 
 def validate_page(meta: dict, schema: Schema, root: str) -> list[str]:
     problems = [f"missing required field: {k}" for k in schema.required if k not in meta]
-    category = root.rsplit("/", 1)[-1]  # str/operations holds obsidian-wiki's `operations`
+    category = root.split("/", 1)[0]  # obsidian-wiki's category: the top-level folder
     if "category" in meta and meta["category"] != category:
-        problems.append(f"category must equal the root's last segment ({category})")
+        problems.append(f"category must equal the root's top-level folder ({category})")
     sources = meta.get("sources")
     if "sources" in meta and (not isinstance(sources, list) or not sources):
         problems.append("sources must cite at least one source")
+    elif "sources" in meta and not all(isinstance(s, dict) and "resource" in s for s in sources):
+        problems.append(
+            "sources entries must be mappings with a resource"
+        )  # OKF sources[].resource
     if "tags" in meta and not isinstance(meta["tags"], list):  # the index renders each as a #tag
         problems.append("tags must be a list")
     for name, rule in schema.fields.items():
@@ -70,8 +85,8 @@ def validate_page(meta: dict, schema: Schema, root: str) -> list[str]:
         kind = rule.get("type")
         if kind == "date" and not _is_date(value):
             problems.append(f"{name} must be an ISO date or datetime")
-        elif kind == "wikilink" and not (isinstance(value, str) and WIKILINK.fullmatch(value)):
-            problems.append(f"{name} must be a [[wikilink]]")
+        elif kind == "link" and LINK_TARGET(value) is None:
+            problems.append(f"{name} must be a link: [text](/path.md) or [[path]]")
         elif kind == "string" and not isinstance(value, str):
             problems.append(f"{name} must be a string")
         elif kind == "list" and not isinstance(value, list):

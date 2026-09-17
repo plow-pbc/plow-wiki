@@ -7,27 +7,27 @@ from plow_wiki.schema import load_schema, schema_path, validate_page
 
 SCHEMA = """---
 root: scheduling
-required: [type, title, summary, category, tags, sources, created, updated, state]
+required: [type, title, description, category, tags, sources, created, updated, state]
 fields:
   type: {const: relationship}
   state: {enum: [idle, requested, awaiting_owner, offered, booked, met]}
   due: {type: date}
-  org: {type: wikilink}
+  org: {type: link}
 ---
 """
 
 GOOD = {
     "type": "relationship",
     "title": "Example Ventures",
-    "summary": "s",
+    "description": "s",
     "category": "scheduling",
     "tags": ["fundraising"],
-    "sources": ["email:1"],
+    "sources": [{"resource": "email:1"}],
     "created": "2026-09-14",
     "updated": "2026-09-14",
     "state": "offered",
     "due": "2026-09-16",
-    "org": "[[orgs/example-ventures]]",
+    "org": "[Example Ventures](/entities/orgs/example-ventures.md)",
 }
 
 
@@ -57,9 +57,11 @@ def test_valid_page_has_no_problems(schema, due):
         ({"state": "flying"}, "state is not an allowed value"),
         ({"type": "person"}, "type does not match its required constant"),
         ({"due": "next week"}, "due must be an ISO date or datetime"),
-        ({"org": "Example"}, "org must be a [[wikilink]]"),
-        ({"category": "people"}, "category must equal the root"),
+        ({"org": "Example"}, "org must be a link"),
+        ({"category": "people"}, "category must equal the root's top-level folder (scheduling)"),
         ({"sources": []}, "sources must cite at least one"),
+        ({"sources": ["email:1"]}, "sources entries must be mappings with a resource"),
+        ({"sources": [{"title": "x"}]}, "sources entries must be mappings with a resource"),
         ({"tags": "fundraising"}, "tags must be a list"),
     ],
 )
@@ -67,6 +69,33 @@ def test_each_violation_is_named(schema, change, fragment):
     meta = {k: v for k, v in {**GOOD, **change}.items() if v is not None}
     problems = validate_page(meta, schema, "scheduling")
     assert any(fragment in p for p in problems), problems
+
+
+@pytest.mark.parametrize(
+    "value, target",
+    [
+        ("[[entities/orgs/x]]", "entities/orgs/x"),
+        ("[[entities/orgs/x|Alias]]", "entities/orgs/x"),
+        ("[X](/entities/orgs/x.md)", "entities/orgs/x"),
+        ("[X](entities/orgs/x.md)", "entities/orgs/x"),
+        ("[X](https://example.com)", None),
+        ("plain", None),
+    ],
+)
+def test_link_target_reads_both_link_forms(value, target):
+    from plow_wiki.schema import LINK_TARGET
+
+    assert LINK_TARGET(value) == target
+
+
+def test_category_is_the_top_level_folder_of_a_nested_root(schema):
+    meta = {**GOOD, "category": "projects"}
+    assert validate_page(meta, schema, "projects/str/operations") == []
+    meta["category"] = "operations"
+    assert any(
+        "top-level folder (projects)" in p
+        for p in validate_page(meta, schema, "projects/str/operations")
+    )
 
 
 @pytest.mark.parametrize(
