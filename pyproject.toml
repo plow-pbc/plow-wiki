@@ -1,7 +1,7 @@
 [project]
 name = "plow-wiki"
 version = "0.2.0"
-description = "A curated, Obsidian-compatible wiki of durable facts for Plow agents."
+description = "An LLM wiki in an Obsidian vault, in Open Knowledge Format, for Plow agents."
 readme = "README.md"
 license = "Apache-2.0"
 requires-python = ">=3.12"

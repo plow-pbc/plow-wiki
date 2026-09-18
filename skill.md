@@ -63,8 +63,8 @@ Never write a credential, card, account number, or code.
 
 `wiki index` rewrites `index.md` from page frontmatter every run, so an
 "update index.md" step in another wiki skill is harmless. Never edit a page
-with `generated: true`, or a table `wiki index` keeps under a page's heading:
-it refuses to overwrite one that changed.
+with `generated_by: wiki-index`, or a table `wiki index` keeps under a page's
+heading: it refuses to overwrite one that changed.
 The obsidian-wiki skills (`wiki-query`, `wiki-ingest`, `wiki-lint`,
 `wiki-digest`) apply for the how; this file wins where they differ. They ship
 inside the `obsidian-wiki` wheel under `obsidian_wiki/_data/skills/`, and the
