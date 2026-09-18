@@ -125,7 +125,7 @@ def _render_table(wiki: Path, name: str, spec: dict, rows: list[tuple[Path, dict
 
 
 def _render_chunks(wiki: Path, by_root: dict) -> str:
-    """What recall embeds: each page's summary and tags, then each fact bullet, in body order.
+    """What recall embeds: each page's description and tags, then each fact bullet, in body order.
 
     Each chunk carries its root's writer, so recall can keep an agent-owned root to that agent.
     `by_root` is keyed by the page's declared root, nested ones included, so a nested root's
@@ -196,7 +196,7 @@ def _file_tables(wiki: Path, root: str, spec: dict, rows: list, files: dict, reg
 
 
 def _section_tables(wiki: Path, spec: dict, rows: list, files: dict, regions: Regions):
-    """A table inside a hand-written page: each page `into`'s wikilink field names."""
+    """A table inside a hand-written page: each page `into`'s link field names."""
     key, section = spec["into"], spec["section"]
     by_target: dict[Path, list] = defaultdict(list)
     for page, meta in rows:

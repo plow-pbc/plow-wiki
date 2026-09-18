@@ -21,7 +21,9 @@ released binary rather than this package.
 A folder you open in Obsidian. Its layout is [obsidian-wiki](https://github.com/Ar9av/obsidian-wiki)'s
 (`entities/`, `concepts/`, `skills/`, `references/`, `synthesis/`, `journal/`, `projects/`, with
 `_raw/` as the inbox and `AGENTS.md` as the curation policy), so its `wiki-query`, `wiki-ingest`,
-`wiki-lint` and `wiki-digest` skills work on it unchanged. Its files are an
+`wiki-lint` and `wiki-digest` skills read it as their own vault; the one difference is the page
+summary key, `description` (OKF's) rather than `summary`, which the `plow-wiki` skill states.
+Its files are an
 [OKF v0.2](https://github.com/GoogleCloudPlatform/open-knowledge-format/blob/main/SPEC.md) bundle:
 every page carries `type`, links are `[text](/path.md)`, `index.md` declares `okf_version`, and
 `log.md` is reserved — so any OKF reader, validator or viewer takes it as is. Plow adds
@@ -38,15 +40,22 @@ Obsidian, first. Also: Google's reference `visualize` renders any bundle as a se
 
 ## Migrating a 0.1 vault
 
-1. Move the roots: `mkdir entities && mv people orgs owner entities/`; an agent root
-   `str/operations` becomes `projects/str/operations` (add `projects/str/str.md` as its overview).
-2. In `wiki.toml` rename the roots (`"entities/people"`, …, `"projects/str"`) and move
-   `_meta/schemas/` to match; in each schema, `wikilink` field types become `link`.
-3. In every page: `summary:` → `description:`; `category:` → the top-level folder
-   (`entities`, `projects`); each `sources:` string becomes `- resource: <the string>`.
-   `[[links]]` may stay.
-4. `wiki validate` lists what is left; then `wiki index --force` (tables re-render with
-   markdown links) and `wiki snapshot`.
+1. Move the roots: `mkdir entities && mv people orgs owner entities/`. An agent's roots
+   keep their sub-path under `projects/`: `mkdir -p projects/str && mv str/operations
+   projects/str/operations` — one `mv` per old root under `str/`, never collapsed into one.
+2. `wiki.toml`: rename each root to its new path (`"entities/people"`, …,
+   `"projects/str/operations"`); move `_meta/schemas/` to match
+   (`_meta/schemas/projects/str/operations.md`). In each schema: `summary` → `description`
+   in `required:` and any table `columns:`; field type `wikilink` → `link`; add
+   `type: Schema` to its frontmatter. Add `type: Policy` to `AGENTS.md`'s frontmatter.
+3. In every page: `summary:` → `description:`; `category:` → the top-level folder; each
+   `sources:` string becomes `- resource: <the string>`; re-point every link whose target
+   moved (`[[orgs/x]]` → `[[entities/orgs/x]]`) — `[[…]]` may stay, the target must be current.
+4. Delete the old generated tables (`generated: true` pages) — `wiki index` regenerates
+   them at the root's new path and never touches the old copy. Append
+   `OBSIDIAN_LINK_FORMAT=markdown` to `.env`.
+5. Re-run `wiki init <path>` (adds `log.md`; changes nothing that exists), then
+   `wiki validate` — it names what is left — then `wiki index --force` and `wiki snapshot`.
 
 ## Releases
 

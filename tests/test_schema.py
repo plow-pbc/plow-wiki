@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from plow_wiki.schema import load_schema, schema_path, validate_page
+from plow_wiki.schema import LINK_TARGET, load_schema, schema_path, validate_page
 
 SCHEMA = """---
 root: scheduling
@@ -77,14 +77,14 @@ def test_each_violation_is_named(schema, change, fragment):
         ("[[entities/orgs/x]]", "entities/orgs/x"),
         ("[[entities/orgs/x|Alias]]", "entities/orgs/x"),
         ("[X](/entities/orgs/x.md)", "entities/orgs/x"),
-        ("[X](entities/orgs/x.md)", "entities/orgs/x"),
+        ("[X](entities/orgs/x.md)", None),
         ("[X](https://example.com)", None),
+        ("[X](https://example.com/x.md)", None),
+        ("see [x](/a.md) later", None),
         ("plain", None),
     ],
 )
 def test_link_target_reads_both_link_forms(value, target):
-    from plow_wiki.schema import LINK_TARGET
-
     assert LINK_TARGET(value) == target
 
 

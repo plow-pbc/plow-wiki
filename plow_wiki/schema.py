@@ -11,9 +11,9 @@ from pathlib import Path
 from plow_wiki.frontmatter import FrontmatterError, parse
 
 WIKILINK = re.compile(r"\[\[([^\]|]+)(?:\|[^\]]*)?\]\]")  # [[path]] or [[path|alias]]; fullmatch
-MDLINK = re.compile(
-    r"\[[^\]]*\]\(/?([^)]+?)\.md\)"
-)  # [text](/path.md) — OKF's bundle-absolute form
+# [text](/path.md) — OKF's bundle-absolute form; the leading slash is required, so a
+# page-relative link ([text](path.md)) or an external one ([text](https://...)) does not match.
+MDLINK = re.compile(r"\[[^\]]*\]\(/([^)]+?)\.md\)")
 
 
 def LINK_TARGET(value) -> str | None:

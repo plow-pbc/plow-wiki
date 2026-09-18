@@ -59,7 +59,9 @@ Read the page first, then rewrite the bullet that already covers the fact, or
 add one. Never append a duplicate. Cite every source as `{resource: <id or
 URL>}` in `sources:`. Link pages as `[Title](/entities/people/jane-doe.md)`;
 `[[wikilinks]]` still resolve but are not written. Keep `updated:` current.
-Never write a credential, card, account number, or code.
+Never write a credential, card, account number, or code. The one-line page
+summary is `description:` (OKF's key); obsidian-wiki's skills say `summary:`
+— this file wins.
 
 `wiki index` rewrites `index.md` from page frontmatter every run, so an
 "update index.md" step in another wiki skill is harmless. Never edit a page

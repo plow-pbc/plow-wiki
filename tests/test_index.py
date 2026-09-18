@@ -6,7 +6,6 @@ from pathlib import Path
 
 import pytest
 
-from plow_wiki import index as index_mod
 from plow_wiki.frontmatter import dump, parse
 from plow_wiki.index import build
 from tests.conftest import SCHEDULING_SCHEMA, run_wiki
@@ -73,7 +72,7 @@ def test_a_stale_generated_true_page_is_still_skipped_as_generated(sched_wiki):
     """A 0.1 vault's generated pages say `generated: true`; the index must not treat them as authored."""
     stale = sched_wiki / "scheduling" / "old-table.md"
     stale.write_text("---\ntitle: Old\ngenerated: true\n---\n# Old\n")
-    index_mod.build(sched_wiki)
+    build(sched_wiki)
     assert "old-table" not in (sched_wiki / "index.md").read_text()
 
 
@@ -110,7 +109,7 @@ def test_a_traversal_table_path_in_a_schema_writes_nothing_outside_the_wiki(sche
     assert not (sched_wiki / "index.md").exists()
 
 
-def test_a_newline_summary_and_a_pipe_title_forge_neither_a_line_nor_a_column(sched_wiki):
+def test_a_newline_description_and_a_pipe_title_forge_neither_a_line_nor_a_column(sched_wiki):
     _with_field(
         sched_wiki / "scheduling" / "pipelines" / "fundraising" / "acme.md",
         title="Acme | Capital",

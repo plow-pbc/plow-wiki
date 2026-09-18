@@ -40,8 +40,8 @@ def refuse_git_inside(wiki: Path) -> None:
 def load_roots(wiki: Path) -> dict[str, str]:
     """`{root: writer}` from wiki.toml. A wiki without one is not a wiki.
 
-    A root may nest (`[roots."str/operations"]`), but never inside another root: a page must
-    belong to exactly one."""
+    A root may nest (`[roots."projects/str/operations"]`), but never inside another root:
+    a page must belong to exactly one."""
     toml = wiki / "wiki.toml"
     if not toml.is_file():
         sys.exit(f"{wiki} is not a wiki: no wiki.toml")
