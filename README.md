@@ -1,8 +1,10 @@
 # plow-wiki
 
-A curated, Obsidian-compatible wiki of durable facts, kept as plain Markdown in
-`~/Plow/wiki` on the owner's Mac, written by agents and humans alike, and shared
-by every Plow agent that drives that Mac.
+A user who opens `~/Plow/wiki` should recognise what they have: an LLM wiki
+(Karpathy's pattern, as [obsidian-wiki](https://github.com/Ar9av/obsidian-wiki)
+implements it) kept in an Obsidian vault, whose files are an
+[OKF v0.2](https://github.com/GoogleCloudPlatform/open-knowledge-format/blob/main/SPEC.md)
+bundle.
 
 ## Install
 
@@ -13,6 +15,38 @@ wiki init ~/Plow/wiki
 
 Open `~/Plow/wiki` in Obsidian. Agents reach it through Latch, which stages a
 released binary rather than this package.
+
+## What you get
+
+A folder you open in Obsidian. Its layout is [obsidian-wiki](https://github.com/Ar9av/obsidian-wiki)'s
+(`entities/`, `concepts/`, `skills/`, `references/`, `synthesis/`, `journal/`, `projects/`, with
+`_raw/` as the inbox and `AGENTS.md` as the curation policy), so its `wiki-query`, `wiki-ingest`,
+`wiki-lint` and `wiki-digest` skills work on it unchanged. Its files are an
+[OKF v0.2](https://github.com/GoogleCloudPlatform/open-knowledge-format/blob/main/SPEC.md) bundle:
+every page carries `type`, links are `[text](/path.md)`, `index.md` declares `okf_version`, and
+`log.md` is reserved — so any OKF reader, validator or viewer takes it as is. Plow adds
+`wiki.toml` (who writes which root), `_meta/schemas/` (what a root's pages carry),
+`^[inferred]`/`^[ambiguous]` bullet markers, and snapshot history beside the vault.
+
+## Viewing
+
+Obsidian, first. Also: Google's reference `visualize` renders any bundle as a self-contained
+[`viz.html`](https://github.com/GoogleCloudPlatform/open-knowledge-format#visualize);
+[Inkeep Open Knowledge](https://github.com/inkeep/open-knowledge) edits one locally;
+[W4G1/okf](https://github.com/W4G1/okf) explores one in a terminal;
+[okflint](https://github.com/mattdav/okflint) validates one (our tests run it).
+
+## Migrating a 0.1 vault
+
+1. Move the roots: `mkdir entities && mv people orgs owner entities/`; an agent root
+   `str/operations` becomes `projects/str/operations` (add `projects/str/str.md` as its overview).
+2. In `wiki.toml` rename the roots (`"entities/people"`, …, `"projects/str"`) and move
+   `_meta/schemas/` to match; in each schema, `wikilink` field types become `link`.
+3. In every page: `summary:` → `description:`; `category:` → the top-level folder
+   (`entities`, `projects`); each `sources:` string becomes `- resource: <the string>`.
+   `[[links]]` may stay.
+4. `wiki validate` lists what is left; then `wiki index --force` (tables re-render with
+   markdown links) and `wiki snapshot`.
 
 ## Releases
 
@@ -26,18 +60,18 @@ tag with a `-` (`v0.2.0-rc.1`) publishes a prerelease.
 
 | Command | Does |
 |---|---|
-| `wiki init <path>` | Creates the wiki: `AGENTS.md`, `wiki.toml`, `_raw/`, one folder per root, each root's schema at `_meta/schemas/<root>.md`, and the `.env` obsidian-wiki's skills find the wiki by |
+| `wiki init <path>` | Creates the wiki: `AGENTS.md`, `wiki.toml`, `log.md`, `_raw/`, one folder per root, each root's schema at `_meta/schemas/<root>.md`, and the `.env` (`OBSIDIAN_VAULT_PATH`, `OBSIDIAN_LINK_FORMAT=markdown`) obsidian-wiki's skills find the wiki by |
 | `wiki validate` | Checks every page's frontmatter against its root's schema |
-| `wiki index` | Regenerates `index.md`, each root's declared tables, and `.wiki/chunks.json` (the facts agent recall embeds) |
+| `wiki index` | Regenerates `index.md` and each root's declared tables with bundle-absolute markdown links, and `.wiki/chunks.json` (the facts agent recall embeds) |
 | `wiki snapshot` | Commits the wiki, less `.env`, into `<wiki>.git` beside it (`~/Plow/wiki.git`) after a credential scan |
 | `wiki history <path>` | Commits touching a page |
 
 `WIKI_PATH` or `--wiki` names the wiki; default `~/Plow/wiki`.
 
-A root in `wiki.toml` may nest, as `[roots."str/operations"]`, but never inside
-another root. Its pages take the last segment as their `category`, its schema
-is `_meta/schemas/str/operations.md`, and `index.md` gives it a
-`## str/operations` section.
+A root in `wiki.toml` may nest, as `[roots."projects/str"]`, but never inside
+another root. Its pages take `projects` as their `category`, its schema
+is `_meta/schemas/projects/str.md`, and `index.md` gives it a
+`## projects/str` section.
 
 ## Tables
 
@@ -51,11 +85,11 @@ tables:
     group_by: stage
     sort_by: due
     columns: [title, state, due]
-  - into: property  # inside the page each matching page's wikilink field names
+  - into: property  # inside the page each matching page's link field names
     section: "## Operations"
     match: {type: Operation}
     sort_by: title
-    columns: [title, summary]
+    columns: [title, description]
 ```
 
 A section table replaces only the lines between its heading and the next `## `
