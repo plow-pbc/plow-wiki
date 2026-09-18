@@ -23,7 +23,7 @@ written by agents and humans alike. `wiki.toml` lists its roots and who
 writes each; `_meta/schemas/<root>.md` says what a page in that root must carry.
 Roots sit under obsidian-wiki's categories; `category` is the top-level folder
 (`entities`, `projects`, …). `wiki index` rebuilds `index.md` and every page
-marked `generated: true` from page frontmatter; do not edit a generated page
+marked `generated_by: wiki-index` from page frontmatter; do not edit a generated page
 by hand.
 
 ## What belongs here

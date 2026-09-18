@@ -32,7 +32,10 @@ sources: [{resource: "email:<thread-id>"}]
 created: 2026-09-14
 updated: 2026-09-14
 timezone: America/New_York
-org: entities/orgs/example-ventures.md
 ---
 - Prefers 30-minute video calls before noon Eastern.
 ```
+
+`org` is a link to the person's org page: a Markdown link whose target is the
+page's bundle-absolute path, `/entities/orgs/<slug>.md`, or an Obsidian
+wikilink to it.
