@@ -32,7 +32,7 @@ def _hand_commit(wiki: Path, message: str) -> None:
 
 
 def test_first_snapshot_creates_bare_repo_beside_the_wiki(wiki):
-    (wiki / "people" / "jane.md").write_text("---\ntitle: Jane\n---\n")
+    (wiki / "entities" / "people" / "jane.md").write_text("---\ntitle: Jane\n---\n")
     sha = snapshot(wiki, author="calendaring")
     assert sha.sha and history_dir(wiki).is_dir()
     assert not (wiki / ".git").exists()
@@ -42,28 +42,29 @@ def test_first_snapshot_creates_bare_repo_beside_the_wiki(wiki):
 def test_a_scratch_wiki_beside_the_real_one_never_snapshots_into_its_history(wiki, tmp_path):
     scratch = tmp_path / "wiki-e2e"
     assert run_wiki("init", str(scratch)).returncode == 0
-    (scratch / "people" / "fixture.md").write_text("---\ntitle: Fixture\n---\n")
+    (scratch / "entities" / "people" / "fixture.md").write_text("---\ntitle: Fixture\n---\n")
     snapshot(scratch, author="e2e")
-    (wiki / "people" / "jane.md").write_text("---\ntitle: Jane\n---\n")
+    (wiki / "entities" / "people" / "jane.md").write_text("---\ntitle: Jane\n---\n")
     snapshot(wiki, author="a")
     assert history_dir(wiki) == tmp_path / "wiki.git"
     touched = _git(wiki, "log", "--all", "--name-only", "--format=").split()
-    assert "people/jane.md" in touched and "people/fixture.md" not in touched, touched
+    assert "entities/people/jane.md" in touched
+    assert "entities/people/fixture.md" not in touched, touched
 
 
 def test_second_identical_snapshot_is_a_noop(wiki):
-    (wiki / "people" / "jane.md").write_text("---\ntitle: Jane\n---\n")
+    (wiki / "entities" / "people" / "jane.md").write_text("---\ntitle: Jane\n---\n")
     snapshot(wiki, author="a")
     assert snapshot(wiki, author="a") is None
 
 
 def test_snapshot_refuses_a_credential_and_commits_nothing(wiki):
-    (wiki / "people" / "leak.md").write_text(
+    (wiki / "entities" / "people" / "leak.md").write_text(
         "---\ntitle: L\n---\ntoken sk-abcdefghijklmnopqrstuvwxyz\n"
     )
     with pytest.raises(SystemExit) as e:
         snapshot(wiki, author="a")
-    assert "people/leak.md (line 4)" in str(e.value) and "sk-abcdef" not in str(e.value)
+    assert "entities/people/leak.md (line 4)" in str(e.value) and "sk-abcdef" not in str(e.value)
     assert _git(wiki, "rev-list", "--all", "--count").strip() == "0"
     assert _objects(wiki) == ("0", "0"), "the credential never reached the object database"
 
@@ -82,57 +83,67 @@ def test_env_is_never_scanned_or_committed(wiki):
     """obsidian-wiki's .env may carry an API key beside the vault path."""
     env = wiki / ".env"
     env.write_text(env.read_text() + "WIKI_API_KEY=sk-abcdefghijklmnopqrstuvwxyz\n")
-    (wiki / "people" / "jane.md").write_text("---\ntitle: Jane\n---\n")
+    (wiki / "entities" / "people" / "jane.md").write_text("---\ntitle: Jane\n---\n")
     assert snapshot(wiki, author="a")
     assert ".env" not in _git(wiki, "log", "--all", "--name-only", "--format=")
     assert snapshot(wiki, author="a") is None, "an untracked .env is not a change to commit"
     # An adopted history can already hold .env in its index; the commit still leaves it out.
     _git(wiki, "--work-tree", str(wiki), "add", "-f", ".env", cwd=wiki)
-    (wiki / "people" / "ann.md").write_text("---\ntitle: Ann\n---\n")
+    (wiki / "entities" / "people" / "ann.md").write_text("---\ntitle: Ann\n---\n")
     assert snapshot(wiki, author="a")
     assert ".env" not in _git(wiki, "log", "--all", "--name-only", "--format=")
 
 
 def test_history_lists_commits_touching_a_page(wiki):
-    page = wiki / "people" / "jane.md"
+    page = wiki / "entities" / "people" / "jane.md"
     page.write_text("---\ntitle: Jane\n---\n- one\n")
     snapshot(wiki, author="a")
     page.write_text("---\ntitle: Jane\n---\n- two\n")
     snapshot(wiki, author="b")
-    lines = history(wiki, "people/jane.md")
+    lines = history(wiki, "entities/people/jane.md")
     assert sum(ln.endswith((" a", " b")) for ln in lines) == 2
-    assert history(wiki, "people/other.md") == ["no commits touch people/other.md"]
+    assert history(wiki, "entities/people/other.md") == [
+        "no commits touch entities/people/other.md"
+    ]
+    # A migrated page (0.1's people/ became entities/people/) keeps its history across the move.
+    moved = wiki / "entities" / "people" / "jane-doe.md"
+    page.rename(moved)
+    snapshot(wiki, author="c")
+    assert (
+        sum(ln.endswith((" a", " b", " c")) for ln in history(wiki, "entities/people/jane-doe.md"))
+        == 3
+    )
 
 
 def test_history_without_repo_fails_loudly(wiki):
     with pytest.raises(SystemExit, match="no history repo yet"):
-        history(wiki, "people/jane.md")
+        history(wiki, "entities/people/jane.md")
 
 
 def test_history_on_a_commitless_repo_says_so(wiki):
-    (wiki / "people" / "leak.md").write_text(
+    (wiki / "entities" / "people" / "leak.md").write_text(
         "---\ntitle: L\n---\ntoken sk-abcdefghijklmnopqrstuvwxyz\n"
     )
     with pytest.raises(SystemExit):
         snapshot(wiki, author="a")
     assert history_dir(wiki).is_dir()
-    assert history(wiki, "people/leak.md") == ["no commits touch people/leak.md"]
+    assert history(wiki, "entities/people/leak.md") == ["no commits touch entities/people/leak.md"]
 
 
 def test_history_fails_loudly_when_the_history_repo_is_broken(wiki):
-    (wiki / "people" / "jane.md").write_text("---\ntitle: Jane\n---\n")
+    (wiki / "entities" / "people" / "jane.md").write_text("---\ntitle: Jane\n---\n")
     snapshot(wiki, author="a")
     shutil.rmtree(history_dir(wiki) / "objects")  # the commit is referenced but unreadable
     with pytest.raises(subprocess.CalledProcessError):
-        history(wiki, "people/jane.md")
+        history(wiki, "entities/people/jane.md")
 
 
 def test_the_scan_reads_no_bytes_through_a_symlink_out_of_the_wiki(wiki, tmp_path):
     outside = tmp_path / "secrets.env"
     outside.write_text("token sk-abcdefghijklmnopqrstuvwxyz\n")
-    (wiki / "people" / "linked.md").symlink_to(outside)
+    (wiki / "entities" / "people" / "linked.md").symlink_to(outside)
     assert snapshot(wiki, author="a"), "git stores the link target, so there is nothing to refuse"
-    stored = _git(wiki, "cat-file", "-p", "HEAD:people/linked.md")
+    stored = _git(wiki, "cat-file", "-p", "HEAD:entities/people/linked.md")
     assert "sk-abcdef" not in stored and stored == str(outside)
 
 
@@ -146,12 +157,12 @@ def _origin_head(origin: Path) -> str:
 
 
 def test_push_requires_origin_then_scans_and_syncs_incrementally(wiki, tmp_path):
-    (wiki / "people" / "jane.md").write_text("---\ntitle: Jane\n---\n")
+    (wiki / "entities" / "people" / "jane.md").write_text("---\ntitle: Jane\n---\n")
     snapshot(wiki, author="a")  # local history exists; no origin configured yet
     before = _git(wiki, "rev-list", "--all", "--count").strip()
 
     # (a) push with no origin at all refuses before doing any work
-    (wiki / "people" / "jane2.md").write_text("---\ntitle: Jane2\n---\n")
+    (wiki / "entities" / "people" / "jane2.md").write_text("---\ntitle: Jane2\n---\n")
     with pytest.raises(SystemExit, match="origin"):
         snapshot(wiki, author="a", push=True)
     assert _git(wiki, "rev-list", "--all", "--count").strip() == before
@@ -165,12 +176,12 @@ def test_push_requires_origin_then_scans_and_syncs_incrementally(wiki, tmp_path)
     assert sha == _origin_head(origin)
 
     # (c) a second push carries the next commit to origin
-    (wiki / "people" / "jane3.md").write_text("---\ntitle: Jane3\n---\n")
+    (wiki / "entities" / "people" / "jane3.md").write_text("---\ntitle: Jane3\n---\n")
     sha2 = snapshot(wiki, author="a", push=True).sha
     assert sha2 == _origin_head(origin) != sha
 
     # (d) a credential added between pushes is refused; origin does not move
-    (wiki / "people" / "leak.md").write_text(
+    (wiki / "entities" / "people" / "leak.md").write_text(
         "---\ntitle: L\n---\ntoken sk-abcdefghijklmnopqrstuvwxyz\n"
     )
     with pytest.raises(SystemExit, match="credential"):
@@ -204,7 +215,7 @@ def test_push_requires_origin_then_scans_and_syncs_incrementally(wiki, tmp_path)
     ],
 )
 def test_the_scan_reads_page_lines_whatever_they_spell(wiki, seed, page, lines):
-    leak = wiki / "people" / "leak.md"
+    leak = wiki / "entities" / "people" / "leak.md"
     if seed:
         leak.write_text(seed)
         snapshot(wiki, author="a")
@@ -215,7 +226,7 @@ def test_the_scan_reads_page_lines_whatever_they_spell(wiki, seed, page, lines):
     with pytest.raises(SystemExit) as e:
         snapshot(wiki, author="a")
     message = str(e.value)
-    assert all(f"people/leak.md ({ln})" in message for ln in lines), message
+    assert all(f"entities/people/leak.md ({ln})" in message for ln in lines), message
     assert "sk-abcdef" not in message and "ghp_abcdef" not in message
     assert "nothing was committed" in message
     assert _git(wiki, "rev-list", "--all", "--count").strip() == committed
@@ -248,10 +259,10 @@ def _merge_resolution(wiki: Path, page: Path, text: str) -> None:
 
 @pytest.mark.parametrize("plant", [_committed, _merge_resolution])
 def test_first_push_refuses_a_credential_already_in_history(wiki, tmp_path, plant):
-    (wiki / "people" / "jane.md").write_text("---\ntitle: Jane\n---\n")
+    (wiki / "entities" / "people" / "jane.md").write_text("---\ntitle: Jane\n---\n")
     snapshot(wiki, author="a")
 
-    leak = wiki / "people" / "leak.md"
+    leak = wiki / "entities" / "people" / "leak.md"
     plant(wiki, leak, "---\ntitle: L\n---\n++ sk-abcdefghijklmnopqrstuvwxyz\n")
     leak.unlink()  # gone from the worktree; only history still holds it
 
@@ -259,10 +270,10 @@ def test_first_push_refuses_a_credential_already_in_history(wiki, tmp_path, plan
     subprocess.run(["git", "init", "-q", "--bare", str(origin)], check=True)
     _git(wiki, "remote", "add", "origin", str(origin))
 
-    (wiki / "people" / "jane2.md").write_text("---\ntitle: Jane2\n---\n")
+    (wiki / "entities" / "people" / "jane2.md").write_text("---\ntitle: Jane2\n---\n")
     with pytest.raises(SystemExit) as e:
         snapshot(wiki, author="a", push=True)
-    assert "people/leak.md (line 4)" in str(e.value)
+    assert "entities/people/leak.md (line 4)" in str(e.value)
     assert "sk-abcdef" not in str(e.value)
     assert (
         subprocess.run(
@@ -276,17 +287,17 @@ def test_first_push_refuses_a_credential_already_in_history(wiki, tmp_path, plan
 
 
 def test_snapshot_commits_a_page_an_in_wiki_gitignore_would_hide(wiki):
-    (wiki / "people" / ".gitignore").write_text("*.md\n")
-    (wiki / "people" / "jane.md").write_text("---\ntitle: Jane\n---\n")
+    (wiki / "entities" / "people" / ".gitignore").write_text("*.md\n")
+    (wiki / "entities" / "people" / "jane.md").write_text("---\ntitle: Jane\n---\n")
     assert snapshot(wiki, author="a")
-    assert "people/jane.md" in _git(wiki, "ls-tree", "-r", "--name-only", "HEAD")
+    assert "entities/people/jane.md" in _git(wiki, "ls-tree", "-r", "--name-only", "HEAD")
 
 
 def test_history_finds_a_page_when_run_from_inside_the_wiki(wiki, monkeypatch):
-    (wiki / "people" / "jane.md").write_text("---\ntitle: Jane\n---\n- one\n")
+    (wiki / "entities" / "people" / "jane.md").write_text("---\ntitle: Jane\n---\n- one\n")
     snapshot(wiki, author="a")
-    monkeypatch.chdir(wiki / "people")
-    assert sum(ln.endswith(" a") for ln in history(wiki, "people/jane.md")) == 1
+    monkeypatch.chdir(wiki / "entities" / "people")
+    assert sum(ln.endswith(" a") for ln in history(wiki, "entities/people/jane.md")) == 1
 
 
 @pytest.mark.parametrize(
@@ -306,11 +317,13 @@ def test_history_finds_a_page_when_run_from_inside_the_wiki(wiki, monkeypatch):
             )
         ),
         pytest.param(
-            "people/door.md",
+            "entities/people/door.md",
             "Front door code 8823. Lockbox 4471#. Wifi password: sunnyvale2024.\n",
             id="door codes are not credentials",
         ),
-        pytest.param("people/nul.md", "guest wrote: \x00 and nothing else\n", id="NUL bytes"),
+        pytest.param(
+            "entities/people/nul.md", "guest wrote: \x00 and nothing else\n", id="NUL bytes"
+        ),
     ],
 )
 def test_snapshot_commits_what_is_neither_an_undeclared_folder_nor_a_credential(wiki, rel, text):
@@ -327,7 +340,7 @@ def _head(wiki: Path) -> str:
 def test_push_on_a_clean_tree_sends_the_commits_origin_does_not_have(wiki, tmp_path):
     origin = tmp_path / "origin.git"
     subprocess.run(["git", "init", "-q", "--bare", str(origin)], check=True)
-    (wiki / "people" / "jane.md").write_text("---\ntitle: Jane\n---\n")
+    (wiki / "entities" / "people" / "jane.md").write_text("---\ntitle: Jane\n---\n")
     snapshot(wiki, author="a")  # the night origin was unreachable: committed, never pushed
     _git(wiki, "remote", "add", "origin", str(origin))
 
@@ -340,7 +353,7 @@ def test_push_on_a_clean_tree_sends_the_commits_origin_does_not_have(wiki, tmp_p
     assert snapshot(wiki, author="a", push=True) is None
 
     # (c) origin is behind by a commit made while it was unreachable
-    (wiki / "people" / "jane2.md").write_text("---\ntitle: Jane2\n---\n")
+    (wiki / "entities" / "people" / "jane2.md").write_text("---\ntitle: Jane2\n---\n")
     committed = snapshot(wiki, author="a")
     assert committed == ("snapshot", _head(wiki))
     assert snapshot(wiki, author="a", push=True) == ("pushed", committed.sha)
@@ -353,7 +366,7 @@ def test_push_on_a_clean_tree_sends_the_commits_origin_does_not_have(wiki, tmp_p
     _git(wiki, "remote", "set-url", "origin", str(origin))
 
     # (e) a credential in an outstanding commit is caught before the clean-tree catch-up push
-    leak = wiki / "people" / "leak.md"
+    leak = wiki / "entities" / "people" / "leak.md"
     leak.write_text("---\ntitle: L\n---\n++ sk-abcdefghijklmnopqrstuvwxyz\n")
     _hand_commit(wiki, "hand")
     leak.unlink()

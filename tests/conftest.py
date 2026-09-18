@@ -30,7 +30,7 @@ def wiki(tmp_path: Path) -> Path:
 
 SCHEDULING_SCHEMA = """---
 root: scheduling
-required: [type, title, summary, category, tags, sources, created, updated]
+required: [type, title, description, category, tags, sources, created, updated]
 fields:
   type: {const: relationship}
 tables:
@@ -54,10 +54,10 @@ def _rel(title, stage, due, state="offered", pipeline="fundraising"):
         {
             "type": "relationship",
             "title": title,
-            "summary": f"{title} summary",
+            "description": f"{title} summary",
             "category": "scheduling",
             "tags": ["x"],
-            "sources": ["email:1"],
+            "sources": [{"resource": "email:1"}],
             "created": "2026-09-01",
             "updated": "2026-09-01",
             "pipeline": pipeline,

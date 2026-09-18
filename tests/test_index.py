@@ -18,10 +18,19 @@ def test_index_lists_every_page_under_its_root_in_obsidian_wikis_entry_format(
     _with_field(sched_wiki / "scheduling" / "pipelines" / "fundraising" / "acme.md", tags=tags)
     build(sched_wiki)
     meta, body = parse((sched_wiki / "index.md").read_text())
-    assert meta["generated"] is True
+    assert meta == {"okf_version": "0.2"}  # OKF: the one key a root index may carry
     lines = body.splitlines()
-    entry = "- [[scheduling/pipelines/fundraising/acme|Acme Capital]] — Acme Capital summary"
+    entry = "- [Acme Capital](/scheduling/pipelines/fundraising/acme.md) — Acme Capital summary"
     assert lines.index(entry + suffix) > lines.index("## scheduling")
+
+
+def test_a_filename_with_a_space_links_as_a_valid_markdown_destination(sched_wiki):
+    """Obsidian names a new note `Jane Doe.md`; a raw space would end the destination."""
+    src = sched_wiki / "scheduling" / "pipelines" / "fundraising" / "acme.md"
+    src.rename(src.with_name("Acme Capital.md"))
+    build(sched_wiki)
+    line = "- [Acme Capital](/scheduling/pipelines/fundraising/Acme%20Capital.md) — Acme Capital summary"
+    assert line in (sched_wiki / "index.md").read_text()
 
 
 @pytest.mark.parametrize("name", ["index.md", ".wiki/chunks.json"])
@@ -46,7 +55,7 @@ def test_table_groups_by_stage_and_sorts_by_due(sched_wiki):
     assert beta < acme
     assert (
         "| Gamma Partners" not in body
-        and r"[[scheduling/pipelines/fundraising/gamma\|Gamma Partners]]" in body
+        and "[Gamma Partners](/scheduling/pipelines/fundraising/gamma.md)" in body
     )
 
 
@@ -66,6 +75,14 @@ def test_generated_hashes_are_recorded(sched_wiki):
     for path in written:
         rel = str(path.relative_to(sched_wiki))
         assert recorded[rel] == hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def test_a_stale_generated_true_page_is_still_skipped_as_generated(sched_wiki):
+    """A 0.1 vault's generated pages say `generated: true`; the index must not treat them as authored."""
+    stale = sched_wiki / "scheduling" / "old-table.md"
+    stale.write_text("---\ntitle: Old\ngenerated: true\n---\n# Old\n")
+    build(sched_wiki)
+    assert "old-table" not in (sched_wiki / "index.md").read_text()
 
 
 def _with_field(page: Path, **over):
@@ -101,23 +118,24 @@ def test_a_traversal_table_path_in_a_schema_writes_nothing_outside_the_wiki(sche
     assert not (sched_wiki / "index.md").exists()
 
 
-def test_a_newline_summary_and_a_pipe_title_forge_neither_a_line_nor_a_column(sched_wiki):
+def test_a_newline_description_and_a_pipe_title_forge_neither_a_line_nor_a_column(sched_wiki):
     _with_field(
         sched_wiki / "scheduling" / "pipelines" / "fundraising" / "acme.md",
-        title="Acme | Capital",
-        summary="one\n- [[forged|Forged]] — injected",
+        title="Acme [DRAFT] | Capital",
+        description="one\n- [[forged|Forged]] — injected",
     )
     build(sched_wiki)
     hits = [ln for ln in (sched_wiki / "index.md").read_text().splitlines() if "injected" in ln]
     assert len(hits) == 1, hits
-    assert hits[0].startswith("- [[scheduling/pipelines/fundraising/acme|"), hits[0]
-    assert "Acme \\| Capital" in hits[0]
+    assert hits[0].startswith(
+        "- [Acme \\[DRAFT\\] \\| Capital](/scheduling/pipelines/fundraising/acme.md) — "
+    ), hits[0]
 
     table = (sched_wiki / "scheduling" / "pipelines" / "fundraising.md").read_text()
-    rows = [ln for ln in table.splitlines() if ln.startswith("| [[")]
+    rows = [ln for ln in table.splitlines() if ln.startswith("| [")]
     cells = len(["", "title", "state", "next_step", "due", ""])  # a link's own `|` splits no cell
     assert {len(re.split(r"(?<!\\)\|", ln)) for ln in rows} == {cells}, rows
-    assert "Acme \\| Capital" in table
+    assert "Acme \\[DRAFT\\] \\| Capital" in table
 
 
 def test_a_generated_table_goes_when_its_last_page_does(sched_wiki):
@@ -146,15 +164,14 @@ def test_generated_updated_comes_from_the_pages_not_the_clock(sched_wiki):
         sched_wiki / "scheduling" / "pipelines" / "fundraising" / "beta.md", updated="2026-09-08"
     )
     build(sched_wiki)
-    for target in ("index.md", "scheduling/pipelines/fundraising.md"):
-        meta, _ = parse((sched_wiki / target).read_text())
-        assert str(meta["updated"]) == "2026-09-08", target
+    meta, _ = parse((sched_wiki / "scheduling" / "pipelines" / "fundraising.md").read_text())
+    assert str(meta["updated"]) == "2026-09-08"
 
 
 def test_an_empty_updated_never_wins_the_generated_date(sched_wiki):
     _with_field(sched_wiki / "scheduling" / "pipelines" / "fundraising" / "acme.md", updated=None)
     build(sched_wiki)
-    meta, _ = parse((sched_wiki / "index.md").read_text())
+    meta, _ = parse((sched_wiki / "scheduling" / "pipelines" / "fundraising.md").read_text())
     assert str(meta["updated"]) == "2026-09-01"
 
 
@@ -162,24 +179,24 @@ def test_generated_dates_compare_calendar_days_not_offset_strings(sched_wiki):
     acme = sched_wiki / "scheduling" / "pipelines" / "fundraising" / "acme.md"
     _with_field(acme, updated="2026-09-20T23:30:00-08:00")
     build(sched_wiki)
-    meta, _ = parse((sched_wiki / "index.md").read_text())
+    meta, _ = parse((sched_wiki / "scheduling" / "pipelines" / "fundraising.md").read_text())
     assert str(meta["updated"]) == "2026-09-20"
 
 
 def test_generated_updated_falls_back_to_today_when_no_page_carries_one(wiki):
     build(wiki)
-    meta, _ = parse((wiki / "index.md").read_text())
-    assert str(meta["updated"]) == datetime.now(UTC).date().isoformat()
+    payload = json.loads((wiki / ".wiki" / "chunks.json").read_text())
+    assert payload["updated"] == datetime.now(UTC).date().isoformat()
 
 
 def test_index_writes_recall_chunks_one_per_page_and_one_per_fact(wiki):
-    (wiki / "people" / "jane-doe.md").write_text(
+    (wiki / "entities" / "people" / "jane-doe.md").write_text(
         dump(
             {
                 "type": "person",
                 "title": "Jane Doe",
-                "summary": "Partner at Example | Ventures.",
-                "category": "people",
+                "description": "Partner at Example | Ventures.",
+                "category": "entities",
                 "tags": ["person", "investor"],
                 "sources": ["email:1"],
                 "created": "2026-09-01",
@@ -193,7 +210,7 @@ def test_index_writes_recall_chunks_one_per_page_and_one_per_fact(wiki):
             "+ Reads every deck before a first meeting.\n",
         )
     )
-    (wiki / "people" / "broken.md").write_text("no frontmatter here\n- a bullet\n")
+    (wiki / "entities" / "people" / "broken.md").write_text("no frontmatter here\n- a bullet\n")
     # A nested root (str's layout, #19) with its own, non-shared writer: its chunks must carry
     # that writer, not "str" — the top-level folder is not itself a declared root at all.
     (wiki / "wiki.toml").write_text(
@@ -204,7 +221,7 @@ def test_index_writes_recall_chunks_one_per_page_and_one_per_fact(wiki):
         dump(
             {
                 "title": "Trash",
-                "summary": "Bins go out Monday.",
+                "description": "Bins go out Monday.",
                 "category": "operations",
                 "tags": ["operations"],
                 "sources": ["obs:1"],
@@ -223,7 +240,7 @@ def test_index_writes_recall_chunks_one_per_page_and_one_per_fact(wiki):
     # The writer is the declared root's, from wiki.toml: recall keeps an agent-owned root to
     # its agent, nested roots included.
     assert {(c["page"], c["title"], c["writer"]) for c in chunks} == {
-        ("people/jane-doe", "Jane Doe", "shared"),
+        ("entities/people/jane-doe", "Jane Doe", "shared"),
         ("str/operations/trash", "Trash", "str"),
     }
     assert [c["text"] for c in chunks] == [
@@ -248,14 +265,14 @@ tables:
     section: "## Operations"
     match: {type: Operation}
     sort_by: title
-    columns: [title, summary]
+    columns: [title, description]
 ---
 """
 HUB = "---\ntitle: Casa\n---\n# Casa\n\nIntro prose.\n\n## Operations\n"
 TABLE = (
-    "\n| title | summary |\n|---|---|\n"
-    "| [[str/operations/casa-trash\\|Trash]] | Bins go out Monday |\n"
-    "| [[str/operations/casa-wifi\\|Wifi]] | Router in the hall |\n\n"
+    "\n| title | description |\n|---|---|\n"
+    "| [Trash](/str/operations/casa-trash.md) | Bins go out Monday |\n"
+    "| [Wifi](/str/operations/casa-wifi.md) | Router in the hall |\n\n"
 )
 
 
@@ -269,11 +286,11 @@ def hub_wiki(wiki: Path) -> Path:
     assert run_wiki("init", str(wiki)).returncode == 0
     (wiki / "_meta" / "schemas" / "str" / "operations.md").write_text(OPERATIONS_SCHEMA)
     (wiki / "str" / "properties" / "casa.md").write_text(HUB)
-    for slug, title, summary, link in (
+    for slug, title, description, link in (
         ("casa-wifi", "Wifi", "Router in the hall", "[[str/properties/casa]]"),
-        ("casa-trash", "Trash", "Bins go out Monday", "[[str/properties/casa|Casa]]"),
+        ("casa-trash", "Trash", "Bins go out Monday", "[Casa](/str/properties/casa.md)"),
     ):
-        meta = {"type": "Operation", "title": title, "summary": summary, "property": link}
+        meta = {"type": "Operation", "title": title, "description": description, "property": link}
         (wiki / "str" / "operations" / f"{slug}.md").write_text(dump(meta, "\n- A fact.\n"))
     return wiki
 
@@ -362,8 +379,8 @@ def test_a_write_that_fails_leaves_the_hand_written_hub_whole(hub_wiki, monkeypa
         ),
         pytest.param(
             lambda w: _with_field(w / "str/operations/casa-wifi.md", property="Casa"),
-            "str/operations/casa-wifi.md: property is not a [[wikilink]]",
-            id="not a wikilink",
+            "str/operations/casa-wifi.md: property is not a link",
+            id="not a link",
         ),
         pytest.param(
             _hand_edit_the_table, "casa.md### Operations was hand-edited", id="hand-edited table"

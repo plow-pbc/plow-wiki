@@ -11,14 +11,16 @@ import tempfile
 from collections import defaultdict
 from datetime import UTC, datetime
 from pathlib import Path
+from urllib.parse import quote
 
 from plow_wiki import paths
 from plow_wiki.frontmatter import FrontmatterError, dump, parse
-from plow_wiki.schema import WIKILINK, load_schema
+from plow_wiki.schema import link_target, load_schema
 
 GENERATED = ".wiki/generated.json"
 INDEX = "index.md"
 CHUNKS = ".wiki/chunks.json"
+OKF_VERSION = "0.2"
 _FACT = re.compile(r"^\s*[-*+]\s+(\S.*?)\s*$")
 
 
@@ -47,10 +49,13 @@ def _cell(value) -> str:
     return _line(value).replace("|", r"\|")
 
 
-def _link(wiki: Path, page: Path, meta: dict, sep: str = "|") -> str:
-    """A table cell passes `\\|`: a bare `|` would split the cell the link sits in."""
-    target = _cell(page.relative_to(wiki).with_suffix(""))
-    return f"[[{target}{sep}{_cell(meta.get('title', page.stem))}]]"
+def _link(wiki: Path, page: Path, meta: dict) -> str:
+    """OKF's bundle-absolute markdown link. The destination is percent-encoded (a space or `|`
+    in a filename would end or split it); in the title `_cell` keeps a `|` out of a table row and
+    `[`/`]` are backslash-escaped so a bracketed title can't truncate the link text."""
+    target = quote(str(page.relative_to(wiki).with_suffix("")))
+    title = _cell(meta.get("title", page.stem)).replace("[", r"\[").replace("]", r"\]")
+    return f"[{title}](/{target}.md)"
 
 
 def _tags(meta: dict) -> str:
@@ -67,8 +72,9 @@ def _generated_meta(title: str, rows: list[tuple[Path, dict]]) -> dict:
     """
     today = datetime.now(UTC).date().isoformat()
     return {
+        "type": "Index",
         "title": title,
-        "generated": True,
+        "generated_by": "wiki-index",
         "category": "generated",
         "tags": ["generated"],
         "sources": [],
@@ -82,11 +88,11 @@ def _render_index(wiki: Path, by_root: dict) -> str:
     for root in paths.load_roots(wiki):
         lines.append(f"## {root}")
         for page, meta in sorted(by_root.get(root, []), key=lambda pm: str(pm[1].get("title", ""))):
-            summary = _cell(meta.get("summary", ""))
-            lines.append(f"- {_link(wiki, page, meta)} — {summary}{_tags(meta)}")
+            description = _cell(meta.get("description", ""))
+            lines.append(f"- {_link(wiki, page, meta)} — {description}{_tags(meta)}")
         lines.append("")
-    listed = [pm for pages in by_root.values() for pm in pages]
-    return dump(_generated_meta("Wiki Index", listed), "\n".join(lines))
+    # OKF §8: a root index carries okf_version and nothing else; obsidian-wiki's lint exempts it.
+    return dump({"okf_version": OKF_VERSION}, "\n".join(lines))
 
 
 def _sorted(rows: list, sort_by: str | None) -> list:
@@ -103,8 +109,7 @@ def _table(wiki: Path, columns: list[str], rows: list) -> list[str]:
     lines = ["| " + " | ".join(map(_cell, columns)) + " |", "|" + "---|" * len(columns)]
     for page, meta in rows:
         cells = [
-            _link(wiki, page, meta, r"\|") if c == "title" else _cell(meta.get(c, ""))
-            for c in columns
+            _link(wiki, page, meta) if c == "title" else _cell(meta.get(c, "")) for c in columns
         ]
         lines.append("| " + " | ".join(cells) + " |")
     return lines
@@ -124,7 +129,7 @@ def _render_table(wiki: Path, name: str, spec: dict, rows: list[tuple[Path, dict
 
 
 def _render_chunks(wiki: Path, by_root: dict) -> str:
-    """What recall embeds: each page's summary and tags, then each fact bullet, in body order.
+    """What recall embeds: each page's description and tags, then each fact bullet, in body order.
 
     Each chunk carries its root's writer, so recall can keep an agent-owned root to that agent.
     `by_root` is keyed by the page's declared root, nested ones included, so a nested root's
@@ -139,7 +144,7 @@ def _render_chunks(wiki: Path, by_root: dict) -> str:
         slug = str(page.relative_to(wiki).with_suffix(""))
         title = _line(meta.get("title", page.stem))
         tags = " ".join(f"#{t}" for t in meta.get("tags", []))
-        lead = " ".join(part for part in (_line(meta.get("summary", "")), tags) if part)
+        lead = " ".join(part for part in (_line(meta.get("description", "")), tags) if part)
         _, body = parse(page.read_text())
         texts = ([lead] if lead else []) + [
             m.group(1) for m in map(_FACT.match, body.splitlines()) if m
@@ -163,11 +168,11 @@ def _splice(text: str, section: str, table: list[str], rel: str) -> tuple[str, s
 
 
 def _link_target(wiki: Path, value, source: str) -> Path:
-    """The page a `[[path]]` or `[[path|alias]]` field names: in the wiki, and there."""
-    link = WIKILINK.fullmatch(value) if isinstance(value, str) else None
-    if link is None:
-        sys.exit(f"{source} is not a [[wikilink]]")
-    target = paths.contained(wiki, wiki / f"{link.group(1)}.md", source)
+    """The page a link field names — [text](/path.md) or [[path]] — in the wiki, and there."""
+    rel = link_target(value)
+    if rel is None:
+        sys.exit(f"{source} is not a link")
+    target = paths.contained(wiki, wiki / f"{rel}.md", source)
     if not target.is_file():
         sys.exit(f"{source} links a page that does not exist; nothing was written")
     return target
@@ -195,7 +200,7 @@ def _file_tables(wiki: Path, root: str, spec: dict, rows: list, files: dict, reg
 
 
 def _section_tables(wiki: Path, spec: dict, rows: list, files: dict, regions: Regions):
-    """A table inside a hand-written page: each page `into`'s wikilink field names."""
+    """A table inside a hand-written page: each page `into`'s link field names."""
     key, section = spec["into"], spec["section"]
     by_target: dict[Path, list] = defaultdict(list)
     for page, meta in rows:
