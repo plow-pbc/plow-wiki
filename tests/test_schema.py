@@ -107,6 +107,7 @@ def test_category_is_the_top_level_folder_of_a_nested_root(schema):
         ("---\n: bad\n---\n", "not valid YAML"),
         ("---\n- a\n- b\n---\n", "not a mapping"),
         ("---\nrequired: [title]\nfields:\n  org: {type: wikilink}\n---\n", "has unknown type"),
+        ("---\nrequired: [title]\nfields:\n  org: link\n---\n", "has unknown type"),
     ],
 )
 def test_load_schema_refuses_a_missing_or_malformed_schema(tmp_path, contents, fragment):

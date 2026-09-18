@@ -49,8 +49,8 @@ def load_schema(wiki: Path, root: str) -> Schema:
         sys.exit(f"{path}: {e}")
     fields = dict(meta.get("fields", {}))
     for name, rule in fields.items():
-        kind = rule.get("type")
-        if kind is not None and kind not in FIELD_TYPES:
+        # A rule is a mapping; its type, when given, is one of FIELD_TYPES.
+        if not isinstance(rule, dict) or rule.get("type", "string") not in FIELD_TYPES:
             sys.exit(f"{path.relative_to(wiki)}: field {name!r} has unknown type")
     return Schema(
         required=list(meta.get("required", [])),
