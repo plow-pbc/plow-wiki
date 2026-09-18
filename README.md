@@ -46,8 +46,8 @@ Obsidian, first. Also: Google's reference `visualize` renders any bundle as a se
 2. `wiki.toml`: rename each root to its new path (`"entities/people"`, …,
    `"projects/str/operations"`); move `_meta/schemas/` to match
    (`_meta/schemas/projects/str/operations.md`). In each schema: `summary` → `description`
-   in `required:` and any table `columns:`; field type `wikilink` → `link`; add
-   `type: Schema` to its frontmatter. Add `type: Policy` to `AGENTS.md`'s frontmatter.
+   in `required:` and any table `columns:`, and `type` joins `required:` (OKF: every
+   page carries one); field type `wikilink` → `link`; add `type: Schema` to its frontmatter. Add `type: Policy` to `AGENTS.md`'s frontmatter.
 3. In every page: `summary:` → `description:`; `category:` → the top-level folder; each
    `sources:` string becomes `- resource: <the string>`; re-point every link whose target
    moved (`[[orgs/x]]` → `[[entities/orgs/x]]`) — `[[…]]` may stay, the target must be current.

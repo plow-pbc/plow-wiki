@@ -11,6 +11,7 @@ import tempfile
 from collections import defaultdict
 from datetime import UTC, datetime
 from pathlib import Path
+from urllib.parse import quote
 
 from plow_wiki import paths
 from plow_wiki.frontmatter import FrontmatterError, dump, parse
@@ -49,10 +50,10 @@ def _cell(value) -> str:
 
 
 def _link(wiki: Path, page: Path, meta: dict) -> str:
-    """OKF's bundle-absolute markdown link; `_cell` keeps a `|` in the title out of a table row,
-    and `[`/`]` are backslash-escaped (CommonMark) so a bracketed title can't truncate the link
-    text."""
-    target = _cell(page.relative_to(wiki).with_suffix(""))
+    """OKF's bundle-absolute markdown link. The destination is percent-encoded (a space or `|`
+    in a filename would end or split it); in the title `_cell` keeps a `|` out of a table row and
+    `[`/`]` are backslash-escaped so a bracketed title can't truncate the link text."""
+    target = quote(str(page.relative_to(wiki).with_suffix("")))
     title = _cell(meta.get("title", page.stem)).replace("[", r"\[").replace("]", r"\]")
     return f"[{title}](/{target}.md)"
 

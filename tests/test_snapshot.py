@@ -105,6 +105,14 @@ def test_history_lists_commits_touching_a_page(wiki):
     assert history(wiki, "entities/people/other.md") == [
         "no commits touch entities/people/other.md"
     ]
+    # A migrated page (0.1's people/ became entities/people/) keeps its history across the move.
+    moved = wiki / "entities" / "people" / "jane-doe.md"
+    page.rename(moved)
+    snapshot(wiki, author="c")
+    assert (
+        sum(ln.endswith((" a", " b", " c")) for ln in history(wiki, "entities/people/jane-doe.md"))
+        == 3
+    )
 
 
 def test_history_without_repo_fails_loudly(wiki):

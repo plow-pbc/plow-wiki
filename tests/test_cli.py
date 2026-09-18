@@ -85,12 +85,20 @@ def test_validate_reports_bad_pages_by_path(wiki):
     assert "jane-doe" not in result.stdout
 
 
+def test_validate_refuses_a_page_without_a_type(wiki):
+    """OKF: `type` is the one key every page carries, so the base schema requires it too."""
+    (wiki / "concepts" / "untyped.md").write_text(_page(type=None, category="concepts"))
+    result = run_wiki("validate", "--wiki", str(wiki))
+    assert result.returncode == 1
+    assert result.stdout.splitlines() == ["concepts/untyped.md: missing required field: type"]
+
+
 @pytest.mark.parametrize(
     "root, page",
     [
         pytest.param("entities/people", _page(), id="type Person under the shipped people schema"),
         pytest.param(
-            "notes", _page(type=None, category="notes"), id="no type under the base schema"
+            "notes", _page(type="Note", category="notes"), id="any type under the base schema"
         ),
     ],
 )
@@ -215,8 +223,10 @@ def test_a_nested_root_validates_indexes_and_snapshots(wiki):
     assert (wiki / "_meta" / "schemas" / "projects" / "str.md").is_file()
     ops = wiki / "projects" / "str" / "operations"
     ops.mkdir(parents=True)
-    (ops / "casa-wifi.md").write_text(_page(type=None, title="Casa wifi", category="projects"))
-    (ops / "bad.md").write_text(_page(type=None, category="operations"))
+    (ops / "casa-wifi.md").write_text(
+        _page(type="Operation", title="Casa wifi", category="projects")
+    )
+    (ops / "bad.md").write_text(_page(type="Operation", category="operations"))
     result = run_wiki("validate", "--wiki", str(wiki))
     assert result.stdout.splitlines() == [
         "projects/str/operations/bad.md: category must equal the root's top-level folder (projects)"

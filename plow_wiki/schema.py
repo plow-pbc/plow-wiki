@@ -7,6 +7,7 @@ import sys
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
+from urllib.parse import unquote
 
 from plow_wiki.frontmatter import FrontmatterError, parse
 
@@ -20,7 +21,9 @@ def link_target(value) -> str | None:
     """The wiki-relative page path (no `.md`) a link field names, in either form; else None."""
     if not isinstance(value, str):
         return None
-    match = MDLINK.fullmatch(value) or WIKILINK.fullmatch(value)
+    if match := MDLINK.fullmatch(value):
+        return unquote(match.group(1))  # a markdown destination carries `Jane Doe` as `Jane%20Doe`
+    match = WIKILINK.fullmatch(value)
     return match.group(1) if match else None
 
 

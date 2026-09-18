@@ -1,7 +1,7 @@
 ---
 type: Schema
 root: entities/orgs
-required: [title, description, category, tags, sources, created, updated]
+required: [type, title, description, category, tags, sources, created, updated]
 fields:
   type: {const: Organization}
   website: {type: string}

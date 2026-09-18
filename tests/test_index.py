@@ -24,6 +24,15 @@ def test_index_lists_every_page_under_its_root_in_obsidian_wikis_entry_format(
     assert lines.index(entry + suffix) > lines.index("## scheduling")
 
 
+def test_a_filename_with_a_space_links_as_a_valid_markdown_destination(sched_wiki):
+    """Obsidian names a new note `Jane Doe.md`; a raw space would end the destination."""
+    src = sched_wiki / "scheduling" / "pipelines" / "fundraising" / "acme.md"
+    src.rename(src.with_name("Acme Capital.md"))
+    build(sched_wiki)
+    line = "- [Acme Capital](/scheduling/pipelines/fundraising/Acme%20Capital.md) — Acme Capital summary"
+    assert line in (sched_wiki / "index.md").read_text()
+
+
 @pytest.mark.parametrize("name", ["index.md", ".wiki/chunks.json"])
 def test_index_md_is_rewritten_over_a_hand_edit(sched_wiki, name):
     """obsidian-wiki's skills update index.md after every write, and chunks.json is recall's copy

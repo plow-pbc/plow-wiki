@@ -78,6 +78,7 @@ def test_each_violation_is_named(schema, change, fragment):
         ("[[entities/orgs/x]]", "entities/orgs/x"),
         ("[[entities/orgs/x|Alias]]", "entities/orgs/x"),
         ("[X](/entities/orgs/x.md)", "entities/orgs/x"),
+        ("[X](/entities/people/Jane%20Doe.md)", "entities/people/Jane Doe"),
         ("[X](entities/orgs/x.md)", None),
         ("[X](https://example.com)", None),
         ("[X](https://example.com/x.md)", None),

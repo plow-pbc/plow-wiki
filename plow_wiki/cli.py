@@ -18,7 +18,7 @@ from plow_wiki.schema import load_schema, schema_path, validate_page
 BASE_SCHEMA = """---
 type: Schema
 root: {root}
-required: [title, description, category, tags, sources, created, updated]
+required: [type, title, description, category, tags, sources, created, updated]
 fields: {{}}
 # obsidian-wiki's lint reads every .md under _meta as a page, so this file carries its keys:
 title: {root} schema

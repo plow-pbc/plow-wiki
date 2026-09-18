@@ -218,5 +218,8 @@ def history(wiki: Path, page: str) -> list[str]:
     # check=True throughout: a repo git cannot read breaks loudly, never reads as "no commits".
     if _git(wiki, "rev-list", "--all", "--count").stdout.strip() == "0":
         return [f"no commits touch {page}"]  # the repo exists, nothing is committed in it yet
-    result = _git(wiki, "log", "--format=%h %ad %an", "--date=short", "--stat", "--", page)
+    # --follow: a migrated page (people/ → entities/people/) keeps its pre-move commits.
+    result = _git(
+        wiki, "log", "--follow", "--format=%h %ad %an", "--date=short", "--stat", "--", page
+    )
     return [ln for ln in result.stdout.splitlines() if ln.strip()] or [f"no commits touch {page}"]

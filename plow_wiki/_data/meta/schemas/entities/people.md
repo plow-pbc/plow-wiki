@@ -1,7 +1,7 @@
 ---
 type: Schema
 root: entities/people
-required: [title, description, category, tags, sources, created, updated]
+required: [type, title, description, category, tags, sources, created, updated]
 fields:
   type: {const: Person}
   org: {type: link}
