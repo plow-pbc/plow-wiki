@@ -112,20 +112,21 @@ def test_a_traversal_table_path_in_a_schema_writes_nothing_outside_the_wiki(sche
 def test_a_newline_description_and_a_pipe_title_forge_neither_a_line_nor_a_column(sched_wiki):
     _with_field(
         sched_wiki / "scheduling" / "pipelines" / "fundraising" / "acme.md",
-        title="Acme | Capital",
+        title="Acme [DRAFT] | Capital",
         description="one\n- [[forged|Forged]] — injected",
     )
     build(sched_wiki)
     hits = [ln for ln in (sched_wiki / "index.md").read_text().splitlines() if "injected" in ln]
     assert len(hits) == 1, hits
-    assert "(/scheduling/pipelines/fundraising/acme.md)" in hits[0], hits[0]
-    assert "Acme \\| Capital" in hits[0]
+    assert hits[0].startswith(
+        "- [Acme \\[DRAFT\\] \\| Capital](/scheduling/pipelines/fundraising/acme.md) — "
+    ), hits[0]
 
     table = (sched_wiki / "scheduling" / "pipelines" / "fundraising.md").read_text()
     rows = [ln for ln in table.splitlines() if ln.startswith("| [")]
     cells = len(["", "title", "state", "next_step", "due", ""])  # a link's own `|` splits no cell
     assert {len(re.split(r"(?<!\\)\|", ln)) for ln in rows} == {cells}, rows
-    assert "Acme \\| Capital" in table
+    assert "Acme \\[DRAFT\\] \\| Capital" in table
 
 
 def test_a_generated_table_goes_when_its_last_page_does(sched_wiki):

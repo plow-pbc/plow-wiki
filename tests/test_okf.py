@@ -14,7 +14,7 @@ MANIFEST = """okf_version: "0.2"
 base:
   name: plow-wiki
   roots:
-    - path: {wiki}
+    - path: "{wiki}"
       exclude_patterns: ["_raw/**", ".wiki/**"]
   reserved_files:
     index: index.md

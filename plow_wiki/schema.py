@@ -16,12 +16,15 @@ WIKILINK = re.compile(r"\[\[([^\]|]+)(?:\|[^\]]*)?\]\]")  # [[path]] or [[path|a
 MDLINK = re.compile(r"\[[^\]]*\]\(/([^)]+?)\.md\)")
 
 
-def LINK_TARGET(value) -> str | None:
+def link_target(value) -> str | None:
     """The wiki-relative page path (no `.md`) a link field names, in either form; else None."""
     if not isinstance(value, str):
         return None
     match = MDLINK.fullmatch(value) or WIKILINK.fullmatch(value)
     return match.group(1) if match else None
+
+
+FIELD_TYPES = frozenset({"date", "link", "string", "list"})
 
 
 @dataclass
@@ -44,9 +47,14 @@ def load_schema(wiki: Path, root: str) -> Schema:
         meta, _ = parse(path.read_text())
     except FrontmatterError as e:
         sys.exit(f"{path}: {e}")
+    fields = dict(meta.get("fields", {}))
+    for name, rule in fields.items():
+        kind = rule.get("type")
+        if kind is not None and kind not in FIELD_TYPES:
+            sys.exit(f"{path.relative_to(wiki)}: field {name!r} has unknown type")
     return Schema(
         required=list(meta.get("required", [])),
-        fields=dict(meta.get("fields", {})),
+        fields=fields,
         tables=list(meta.get("tables", [])),
     )
 
@@ -68,7 +76,10 @@ def validate_page(meta: dict, schema: Schema, root: str) -> list[str]:
     sources = meta.get("sources")
     if "sources" in meta and (not isinstance(sources, list) or not sources):
         problems.append("sources must cite at least one source")
-    elif "sources" in meta and not all(isinstance(s, dict) and "resource" in s for s in sources):
+    elif "sources" in meta and not all(
+        isinstance(s, dict) and isinstance(s.get("resource"), str) and s["resource"]
+        for s in sources
+    ):
         problems.append(
             "sources entries must be mappings with a resource"
         )  # OKF sources[].resource
@@ -85,7 +96,7 @@ def validate_page(meta: dict, schema: Schema, root: str) -> list[str]:
         kind = rule.get("type")
         if kind == "date" and not _is_date(value):
             problems.append(f"{name} must be an ISO date or datetime")
-        elif kind == "link" and LINK_TARGET(value) is None:
+        elif kind == "link" and link_target(value) is None:
             problems.append(f"{name} must be a link: [text](/path.md) or [[path]]")
         elif kind == "string" and not isinstance(value, str):
             problems.append(f"{name} must be a string")

@@ -14,7 +14,7 @@ from pathlib import Path
 
 from plow_wiki import paths
 from plow_wiki.frontmatter import FrontmatterError, dump, parse
-from plow_wiki.schema import LINK_TARGET, load_schema
+from plow_wiki.schema import link_target, load_schema
 
 GENERATED = ".wiki/generated.json"
 INDEX = "index.md"
@@ -49,9 +49,12 @@ def _cell(value) -> str:
 
 
 def _link(wiki: Path, page: Path, meta: dict) -> str:
-    """OKF's bundle-absolute markdown link; `_cell` keeps a `|` in the title out of a table row."""
+    """OKF's bundle-absolute markdown link; `_cell` keeps a `|` in the title out of a table row,
+    and `[`/`]` are backslash-escaped (CommonMark) so a bracketed title can't truncate the link
+    text."""
     target = _cell(page.relative_to(wiki).with_suffix(""))
-    return f"[{_cell(meta.get('title', page.stem))}](/{target}.md)"
+    title = _cell(meta.get("title", page.stem)).replace("[", r"\[").replace("]", r"\]")
+    return f"[{title}](/{target}.md)"
 
 
 def _tags(meta: dict) -> str:
@@ -165,7 +168,7 @@ def _splice(text: str, section: str, table: list[str], rel: str) -> tuple[str, s
 
 def _link_target(wiki: Path, value, source: str) -> Path:
     """The page a link field names — [text](/path.md) or [[path]] — in the wiki, and there."""
-    rel = LINK_TARGET(value)
+    rel = link_target(value)
     if rel is None:
         sys.exit(f"{source} is not a link")
     target = paths.contained(wiki, wiki / f"{rel}.md", source)
