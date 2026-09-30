@@ -27,7 +27,7 @@ the tail, and a `--wiki <path>` flag there is refused outright. Latch
 sandboxes the command, so one that writes must declare `write_paths`, or it
 fails with EPERM:
 
-- `plow_run_command(argv=["wiki", "validate", "--writer", "<your agent name>"])`
+- `plow_run_command(argv=["wiki", "validate", "--writer", "<writer>"])`
 - `plow_run_command(argv=["wiki", "index"], write_paths=["~/Plow/wiki"])`
 - `plow_run_command(argv=["wiki", "snapshot", "--author", "<your agent name>"], write_paths=["~/Plow/wiki", "~/Plow/wiki.git"])`
 
@@ -67,8 +67,9 @@ summary is `description:` (OKF's key); obsidian-wiki's skills say `summary:`
 "update index.md" step in another wiki skill is harmless. Never edit a page
 with `generated_by: wiki-index`, or a table `wiki index` keeps under a page's
 heading: it refuses to overwrite one that changed.
-After writing pages, run `wiki validate --writer <your agent name>` and fix
-what it names.
+After writing pages, run `wiki validate --writer <writer>` once per writer
+label you wrote under — your agent name for your own roots, `shared` for a
+shared one — and fix what it names.
 The obsidian-wiki skills (`wiki-query`, `wiki-ingest`, `wiki-lint`,
 `wiki-digest`) apply for the how; this file wins where they differ. They ship
 inside the `obsidian-wiki` wheel under `obsidian_wiki/_data/skills/`, and the
