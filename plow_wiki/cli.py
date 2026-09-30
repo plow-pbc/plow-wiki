@@ -73,13 +73,22 @@ def cmd_init(args: argparse.Namespace) -> int:
     return 0
 
 
-def _problems(wiki: Path) -> tuple[list[str], int]:
-    """Every validation problem in the wiki, as `path: problem` lines, plus the page count."""
-    schemas = {
-        root: load_schema(wiki, root) for root in paths.load_roots(wiki) if (wiki / root).is_dir()
-    }
+def _problems(wiki: Path, writer: str | None = None) -> tuple[list[str], int]:
+    """Every validation problem in the wiki — or in the roots one writer owns — as
+    `path: problem` lines, plus the page count."""
+    writers = paths.load_roots(wiki)
+    if writer is not None and writer not in writers.values():
+        # Never "validated 0 pages": a typo'd writer would make the check pass vacuously.
+        declared = ", ".join(sorted(set(writers.values())))
+        print(
+            f"no root in wiki.toml is written by {writer!r} (writers: {declared})", file=sys.stderr
+        )
+        raise SystemExit(2)
+    schemas = {root: load_schema(wiki, root) for root in writers if (wiki / root).is_dir()}
     lines, count = [], 0
     for root, page in paths.iter_pages(wiki):
+        if writer is not None and writers[root] != writer:
+            continue
         count += 1
         rel = page.relative_to(wiki)
         try:
@@ -93,7 +102,7 @@ def _problems(wiki: Path) -> tuple[list[str], int]:
 
 def cmd_validate(args: argparse.Namespace) -> int:
     wiki = paths.resolve_wiki(args.wiki)
-    lines, count = _problems(wiki)
+    lines, count = _problems(wiki, args.writer)
     for line in lines:
         print(line)
     if lines:
@@ -130,7 +139,12 @@ def _snapshot_args(p: argparse.ArgumentParser) -> None:
 
 SUBCOMMANDS = {
     "init": (lambda p: p.add_argument("path"), cmd_init),
-    "validate": (lambda p: None, cmd_validate),
+    "validate": (
+        lambda p: p.add_argument(
+            "--writer", help="check only the roots this writer owns in wiki.toml"
+        ),
+        cmd_validate,
+    ),
     "index": (lambda p: p.add_argument("--force", action="store_true"), cmd_index),
     "snapshot": (_snapshot_args, cmd_snapshot),
     "history": (lambda p: p.add_argument("path"), cmd_history),
