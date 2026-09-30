@@ -84,10 +84,12 @@ def _problems(wiki: Path, writer: str | None = None) -> tuple[list[str], int]:
             f"no root in wiki.toml is written by {writer!r} (writers: {declared})", file=sys.stderr
         )
         raise SystemExit(2)
-    schemas = {root: load_schema(wiki, root) for root in writers if (wiki / root).is_dir()}
+    # Another writer's schema is theirs to fix too, so only these roots' schemas load.
+    mine = {root for root, w in writers.items() if writer in (None, w)}
+    schemas = {root: load_schema(wiki, root) for root in mine if (wiki / root).is_dir()}
     lines, count = [], 0
     for root, page in paths.iter_pages(wiki):
-        if writer is not None and writers[root] != writer:
+        if root not in mine:
             continue
         count += 1
         rel = page.relative_to(wiki)
