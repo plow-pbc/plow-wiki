@@ -241,6 +241,47 @@ def test_a_nested_root_validates_indexes_and_snapshots(wiki):
     )
 
 
+@pytest.mark.parametrize(
+    "writer, expected_rc, expected",
+    [
+        pytest.param(
+            "str", 0, ["validated 1 pages"], id="own root clean, other's bad page ignored"
+        ),
+        pytest.param(
+            "shared",
+            1,
+            ["entities/people/bad.md: missing required field: description"],
+            id="shared",
+        ),
+        pytest.param(
+            None,
+            1,
+            ["entities/people/bad.md: missing required field: description"],
+            id="no flag: everything",
+        ),
+    ],
+)
+def test_validate_scopes_to_one_writer(wiki, writer, expected_rc, expected):
+    """A page another writer owns is that writer's to fix, so `--writer` checks only its roots."""
+    (wiki / "wiki.toml").write_text(
+        (wiki / "wiki.toml").read_text() + '[roots."projects/str"]\nwriter = "str"\n'
+    )
+    assert run_wiki("init", str(wiki)).returncode == 0
+    (wiki / "projects" / "str" / "page.md").write_text(_page(type="Note", category="projects"))
+    (wiki / "entities" / "people" / "bad.md").write_text(_page(description=None))
+    args = ["validate", "--wiki", str(wiki)] + (["--writer", writer] if writer else [])
+    result = run_wiki(*args)
+    assert result.returncode == expected_rc, result.stderr
+    assert result.stdout.splitlines() == expected
+
+
+def test_validate_refuses_a_writer_no_root_declares(wiki):
+    """A typo'd writer would otherwise validate nothing and pass."""
+    result = run_wiki("validate", "--wiki", str(wiki), "--writer", "st")
+    assert result.returncode == 2
+    assert "no root in wiki.toml is written by 'st' (writers: shared)" in result.stderr
+
+
 def test_a_page_symlinked_out_of_the_wiki_is_neither_indexed_nor_validated(wiki, tmp_path):
     outside = tmp_path / "outside.md"
     outside.write_text(_page(title="Outside Page"))

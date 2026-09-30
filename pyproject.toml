@@ -1,6 +1,6 @@
 [project]
 name = "plow-wiki"
-version = "0.2.0"
+version = "0.2.1"
 description = "An LLM wiki in an Obsidian vault, in Open Knowledge Format, for Plow agents."
 readme = "README.md"
 license = "Apache-2.0"

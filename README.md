@@ -70,7 +70,7 @@ tag with a `-` (`v0.2.0-rc.1`) publishes a prerelease.
 | Command | Does |
 |---|---|
 | `wiki init <path>` | Creates the wiki: `AGENTS.md`, `wiki.toml`, `log.md`, `_raw/`, one folder per root, each root's schema at `_meta/schemas/<root>.md`, and the `.env` (`OBSIDIAN_VAULT_PATH`, `OBSIDIAN_LINK_FORMAT=markdown`) obsidian-wiki's skills find the wiki by |
-| `wiki validate` | Checks every page's frontmatter against its root's schema |
+| `wiki validate [--writer NAME]` | Checks every page's frontmatter against its root's schema; `--writer` checks only the roots `wiki.toml` gives NAME |
 | `wiki index` | Regenerates `index.md` and each root's declared tables with bundle-absolute markdown links, and `.wiki/chunks.json` (the facts agent recall embeds) |
 | `wiki snapshot` | Commits the wiki, less `.env`, into `<wiki>.git` beside it (`~/Plow/wiki.git`) after a credential scan |
 | `wiki history <path>` | Commits touching a page |
