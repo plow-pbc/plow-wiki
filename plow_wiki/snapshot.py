@@ -227,7 +227,7 @@ def history(wiki: Path, page: str) -> list[str]:
 
 def restore(wiki: Path, roots: list[str]) -> list[str]:
     """Put these roots back to the last snapshot: tracked files as committed, files created
-    since moved to Obsidian's `.trash/`, never deleted. Returns what changed, wiki-relative.
+    since moved to Obsidian's `.trash/`. Returns what changed, wiki-relative.
 
     Writes no object: a page being thrown away may hold exactly what the scan refuses."""
     paths.refuse_git_inside(wiki)
@@ -239,9 +239,11 @@ def restore(wiki: Path, roots: list[str]) -> list[str]:
     created = _git(wiki, "ls-files", "-z", "--others", "--", *roots).stdout
     changed = _git(wiki, "diff", "-z", "--name-only", "--no-renames", "HEAD", "--", *roots).stdout
     for rel in filter(None, created.split("\0")):
+        created_file = wiki / rel
+        paths.contained(wiki, created_file.parent)  # the file itself: a symlink moves as a link
         trashed = wiki / ".trash" / rel
         trashed.parent.mkdir(parents=True, exist_ok=True)
-        paths.contained(wiki, wiki / rel).replace(trashed)
+        created_file.replace(trashed)
     tracked = [r for r in roots if _git(wiki, "ls-tree", "-d", "HEAD", "--", r).stdout.strip()]
     if changed and tracked:
         _git(wiki, "checkout", "HEAD", "--", *tracked)

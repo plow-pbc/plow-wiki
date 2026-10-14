@@ -374,14 +374,16 @@ def test_restore_puts_back_one_writers_roots_and_nothing_else(wiki):
     (ops / "gone.md").unlink()
     (ops / "new.md").write_text("tonight\n")
     jane.write_text("v2, another writer's\n")
+    (ops / "link.md").symlink_to(jane)
 
     result = run_wiki("restore", "--wiki", str(wiki), "--writer", "str")
     assert result.returncode == 0, result.stderr
     assert result.stdout.splitlines() == [
         "restored projects/str/operations/gone.md",
         "restored projects/str/operations/kept.md",
+        "restored projects/str/operations/link.md",
         "restored projects/str/operations/new.md",
-        "restored 3 files to the last snapshot",
+        "restored 4 files to the last snapshot",
     ]
     assert (ops / "kept.md").read_text() == "good\n"
     assert (ops / "gone.md").read_text() == "good\n"
