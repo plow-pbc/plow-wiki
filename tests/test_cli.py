@@ -16,7 +16,7 @@ ENTITY_ROOTS = ("entities/people", "entities/orgs", "entities/owner")
 def test_wiki_help_names_every_subcommand():
     result = run_wiki("--help")
     assert result.returncode == 0
-    for name in ("init", "validate", "index", "snapshot", "history"):
+    for name in ("init", "validate", "index", "snapshot", "history", "restore"):
         assert name in result.stdout
 
 
@@ -181,7 +181,7 @@ def test_latch_manifest_matches_the_cli():
     assert manifest["skill"] == "skill.md" and (REPO / "skill.md").is_file()
     argv = {bucket: {tuple(a) for a in cmds} for bucket, cmds in manifest["argv"].items()}
     assert argv["read"] == {("validate",), ("history",)}  # a command that writes is not a read
-    assert argv["write"] == {("init",), ("index",), ("snapshot",)}
+    assert argv["write"] == {("init",), ("index",), ("snapshot",), ("restore",)}
     (binary,) = manifest["runtime"]["binaries"]
     assert binary["name"] == "wiki"
     assert binary["url"] == {
@@ -354,3 +354,53 @@ def test_validate_names_a_root_that_has_no_schema(wiki):
 
 def test_gitignore_keeps_review_artifacts_and_build_output_out_of_the_sdist():
     assert {".superpowers/", "dist/"} <= set((REPO / ".gitignore").read_text().split())
+
+
+def test_restore_puts_back_one_writers_roots_and_nothing_else(wiki):
+    """A night that failed its checks is undone for the writer that ran it; another writer's
+    unsnapshotted work in the same wiki survives."""
+    (wiki / "wiki.toml").write_text(
+        (wiki / "wiki.toml").read_text() + '[roots."projects/str/operations"]\nwriter = "str"\n'
+    )
+    assert run_wiki("init", str(wiki)).returncode == 0
+    ops = wiki / "projects" / "str" / "operations"
+    (ops / "kept.md").write_text("good\n")
+    (ops / "gone.md").write_text("good\n")
+    jane = wiki / "entities" / "people" / "jane.md"
+    jane.write_text("v1\n")
+    assert run_wiki("snapshot", "--wiki", str(wiki)).returncode == 0
+
+    (ops / "kept.md").write_text("---\\ntype: corrupted\n")
+    (ops / "gone.md").unlink()
+    (ops / "new.md").write_text("tonight\n")
+    jane.write_text("v2, another writer's\n")
+
+    result = run_wiki("restore", "--wiki", str(wiki), "--writer", "str")
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.splitlines() == [
+        "restored projects/str/operations/gone.md",
+        "restored projects/str/operations/kept.md",
+        "restored projects/str/operations/new.md",
+        "restored 3 files to the last snapshot",
+    ]
+    assert (ops / "kept.md").read_text() == "good\n"
+    assert (ops / "gone.md").read_text() == "good\n"
+    assert not (ops / "new.md").exists()
+    assert jane.read_text() == "v2, another writer's\n"
+    assert run_wiki("restore", "--wiki", str(wiki), "--writer", "str").stdout.splitlines() == [
+        "restored 0 files to the last snapshot"
+    ]
+
+
+@pytest.mark.parametrize(
+    "args, rc, stderr",
+    [
+        pytest.param(["--writer", "shared"], 1, "no snapshot to restore to", id="no snapshot"),
+        pytest.param(["--writer", "st"], 2, "no root in wiki.toml is written by 'st'", id="typo"),
+        pytest.param([], 2, "--writer", id="writer is required"),
+    ],
+)
+def test_restore_refuses_rather_than_restoring_nothing(wiki, args, rc, stderr):
+    result = run_wiki("restore", "--wiki", str(wiki), *args)
+    assert result.returncode == rc
+    assert stderr in result.stderr

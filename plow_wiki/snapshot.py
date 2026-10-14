@@ -223,3 +223,24 @@ def history(wiki: Path, page: str) -> list[str]:
         wiki, "log", "--follow", "--format=%h %ad %an", "--date=short", "--stat", "--", page
     )
     return [ln for ln in result.stdout.splitlines() if ln.strip()] or [f"no commits touch {page}"]
+
+
+def restore(wiki: Path, roots: list[str]) -> list[str]:
+    """Put these roots back to the last snapshot: tracked files as committed, files created
+    since deleted. Returns what changed, as wiki-relative paths.
+
+    Writes no object: a page being thrown away may hold exactly what the scan refuses."""
+    paths.refuse_git_inside(wiki)
+    if not history_dir(wiki).is_dir() or (
+        _git(wiki, "rev-parse", "--verify", "HEAD", check=False).returncode != 0
+    ):
+        sys.exit("no snapshot to restore to — run wiki snapshot first")
+    _git(wiki, "read-tree", "HEAD")  # the index is scratch: snapshot re-adds everything
+    created = _git(wiki, "ls-files", "-z", "--others", "--", *roots).stdout
+    changed = _git(wiki, "diff", "-z", "--name-only", "--no-renames", "HEAD", "--", *roots).stdout
+    for rel in filter(None, created.split("\0")):
+        paths.contained(wiki, wiki / rel).unlink()
+    tracked = [r for r in roots if _git(wiki, "ls-tree", "-d", "HEAD", "--", r).stdout.strip()]
+    if changed and tracked:
+        _git(wiki, "checkout", "HEAD", "--", *tracked)
+    return sorted(filter(None, (created + changed).split("\0")))
