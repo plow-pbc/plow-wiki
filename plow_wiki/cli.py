@@ -73,19 +73,24 @@ def cmd_init(args: argparse.Namespace) -> int:
     return 0
 
 
-def _problems(wiki: Path, writer: str | None = None) -> tuple[list[str], int]:
-    """Every validation problem in the wiki — or in the roots one writer owns — as
-    `path: problem` lines, plus the page count."""
+def _roots_of(wiki: Path, writer: str | None) -> list[str]:
+    """The roots one writer owns, or every root. Refuses a writer no root declares: a typo'd
+    one would otherwise make validate pass, and restore succeed, on nothing."""
     writers = paths.load_roots(wiki)
     if writer is not None and writer not in writers.values():
-        # Never "validated 0 pages": a typo'd writer would make the check pass vacuously.
         declared = ", ".join(sorted(set(writers.values())))
         print(
             f"no root in wiki.toml is written by {writer!r} (writers: {declared})", file=sys.stderr
         )
         raise SystemExit(2)
+    return sorted(root for root, w in writers.items() if writer in (None, w))
+
+
+def _problems(wiki: Path, writer: str | None = None) -> tuple[list[str], int]:
+    """Every validation problem in the wiki — or in the roots one writer owns — as
+    `path: problem` lines, plus the page count."""
     # Another writer's schema is theirs to fix too, so only these roots' schemas load.
-    mine = {root for root, w in writers.items() if writer in (None, w)}
+    mine = set(_roots_of(wiki, writer))
     schemas = {root: load_schema(wiki, root) for root in mine if (wiki / root).is_dir()}
     lines, count = [], 0
     for root, page in paths.iter_pages(wiki):
@@ -128,6 +133,15 @@ def cmd_snapshot(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_restore(args: argparse.Namespace) -> int:
+    wiki = paths.resolve_wiki(args.wiki)
+    changed = snap.restore(wiki, _roots_of(wiki, args.writer))
+    for rel in changed:
+        print(f"restored {rel}")
+    print(f"restored {len(changed)} files to the last snapshot")
+    return 0
+
+
 def cmd_history(args: argparse.Namespace) -> int:
     for line in snap.history(paths.resolve_wiki(args.wiki), args.path):
         print(line)
@@ -150,6 +164,12 @@ SUBCOMMANDS = {
     "index": (lambda p: p.add_argument("--force", action="store_true"), cmd_index),
     "snapshot": (_snapshot_args, cmd_snapshot),
     "history": (lambda p: p.add_argument("path"), cmd_history),
+    "restore": (
+        lambda p: p.add_argument(
+            "--writer", required=True, help="restore only the roots this writer owns in wiki.toml"
+        ),
+        cmd_restore,
+    ),
 }
 
 
