@@ -386,6 +386,7 @@ def test_restore_puts_back_one_writers_roots_and_nothing_else(wiki):
     assert (ops / "kept.md").read_text() == "good\n"
     assert (ops / "gone.md").read_text() == "good\n"
     assert not (ops / "new.md").exists()
+    assert (wiki / ".trash" / "projects/str/operations/new.md").read_text() == "tonight\n"
     assert jane.read_text() == "v2, another writer's\n"
     assert run_wiki("restore", "--wiki", str(wiki), "--writer", "str").stdout.splitlines() == [
         "restored 0 files to the last snapshot"
