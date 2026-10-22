@@ -52,7 +52,9 @@ def _git(wiki: Path, *args: str, check: bool = True, **env) -> subprocess.Comple
         ["git", "--git-dir", str(history_dir(wiki)), "--work-tree", str(wiki), *_DIFF, *args],
         capture_output=True,
         text=True,
-        errors="replace",  # `log -p --text` carries any committed binary, e.g. Finder's .DS_Store
+        # `log -p --text` carries any committed binary (Finder's .DS_Store); surrogateescape
+        # also round-trips a non-UTF-8 pathname that `restore` hands back to unlink().
+        errors="surrogateescape",
         check=check,
         cwd=wiki,  # git reads pathspecs relative to cwd, not the work tree
         env={**os.environ, **env},
