@@ -189,6 +189,20 @@ def test_push_requires_origin_then_scans_and_syncs_incrementally(wiki, tmp_path)
     assert _origin_head(origin) == sha2
 
 
+def test_push_scans_past_a_non_utf8_file(wiki, tmp_path):
+    """Finder drops a binary .DS_Store into any folder it opens; the push must still go out."""
+    origin = tmp_path / "origin.git"
+    subprocess.run(["git", "init", "-q", "--bare", str(origin)], check=True)
+    (wiki / "entities" / "people" / "jane.md").write_text("---\ntitle: Jane\n---\n")
+    snapshot(wiki, author="a")
+    _git(wiki, "remote", "add", "origin", str(origin))
+    snapshot(wiki, author="a", push=True)
+    (wiki / ".DS_Store").write_bytes(b"\x00\x00\x00\x01Bud1\x80\xff")
+    committed = snapshot(wiki, author="a")  # the nightly commits, then pushes in a second run
+    assert snapshot(wiki, author="a", push=True) == ("pushed", committed.sha)
+    assert _origin_head(origin) == committed.sha
+
+
 @pytest.mark.parametrize(
     "seed, page, lines",
     [
