@@ -58,15 +58,21 @@ def test_second_identical_snapshot_is_a_noop(wiki):
     assert snapshot(wiki, author="a") is None
 
 
-def test_snapshot_refuses_a_credential_and_commits_nothing(wiki):
-    (wiki / "entities" / "people" / "leak.md").write_text(
-        "---\ntitle: L\n---\ntoken sk-abcdefghijklmnopqrstuvwxyz\n"
-    )
+@pytest.mark.parametrize(
+    "token", ["sk-abcdefghijklmnopqrstuvwxyz", "_sk-abcdefghijklmnopqrstuvwxyz_"]
+)
+def test_snapshot_refuses_a_credential_and_commits_nothing(wiki, token):
+    (wiki / "entities" / "people" / "leak.md").write_text(f"---\ntitle: L\n---\ntoken {token}\n")
     with pytest.raises(SystemExit) as e:
         snapshot(wiki, author="a")
     assert "entities/people/leak.md (line 4)" in str(e.value) and "sk-abcdef" not in str(e.value)
     assert _git(wiki, "rev-list", "--all", "--count").strip() == "0"
     assert _objects(wiki) == ("0", "0"), "the credential never reached the object database"
+
+
+def test_snapshot_commits_a_slug_that_merely_contains_sk(wiki):
+    (wiki / "log.md").write_text("added rule ask-owner-to-confirm-before-booking\n")
+    assert snapshot(wiki, author="a") is not None
 
 
 def test_snapshot_refuses_git_inside_and_undeclared_roots(wiki):
