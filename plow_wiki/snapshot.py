@@ -259,7 +259,7 @@ def restore(wiki: Path, roots: list[str]) -> list[str]:
 def _restore_records(wiki: Path, roots: list[str]) -> None:
     """The index's record of every generated region in these roots, put back with them: left at
     the night's, it reads each table the restore just put back as hand-edited."""
-    record = wiki / GENERATED
+    record = paths.contained(wiki, wiki / GENERATED)
     if not record.is_file():
         return
     shown = _git(wiki, "show", f"HEAD:{GENERATED}", check=False)
