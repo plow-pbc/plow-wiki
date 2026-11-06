@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import subprocess
@@ -11,6 +12,7 @@ from pathlib import Path
 from typing import NamedTuple
 
 from plow_wiki import paths
+from plow_wiki.index import GENERATED, _replace
 
 CREDENTIAL = re.compile(
     r"sk-[A-Za-z0-9_-]{16}|gh[pousr]_[A-Za-z0-9]{20}|github_pat_[A-Za-z0-9_]{20}"
@@ -250,4 +252,19 @@ def restore(wiki: Path, roots: list[str]) -> list[str]:
     tracked = [r for r in roots if _git(wiki, "ls-tree", "-d", "HEAD", "--", r).stdout.strip()]
     if changed and tracked:
         _git(wiki, "checkout", "HEAD", "--", *tracked)
+    _restore_records(wiki, roots)
     return sorted(filter(None, (created + changed).split("\0")))
+
+
+def _restore_records(wiki: Path, roots: list[str]) -> None:
+    """The index's record of every generated region in these roots, put back with them: left at
+    the night's, it reads each table the restore just put back as hand-edited."""
+    record = paths.contained(wiki, wiki / GENERATED)
+    if not record.is_file():
+        return
+    shown = _git(wiki, "show", f"HEAD:{GENERATED}", check=False)
+    snapped = json.loads(shown.stdout) if shown.returncode == 0 else {}
+    ours = tuple(f"{root}/" for root in roots)
+    kept = {k: v for k, v in json.loads(record.read_text()).items() if not k.startswith(ours)}
+    kept |= {k: v for k, v in snapped.items() if k.startswith(ours)}
+    _replace(record, json.dumps(kept, indent=1, sort_keys=True))

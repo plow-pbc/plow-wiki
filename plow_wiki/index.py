@@ -162,7 +162,10 @@ def _splice(text: str, section: str, table: list[str], rel: str) -> tuple[str, s
     if at is None:
         sys.exit(f"{rel} has no '{section}' heading for its table; nothing was written")
     end = next((i for i in range(at + 1, len(lines)) if lines[i].startswith("## ")), len(lines))
-    old, new = "".join(lines[at + 1 : end]), "\n" + "\n".join(table) + "\n\n"
+    # At the end of the page, one final newline, as every editor saves a file: with two, a writer
+    # that rewrote the hub and kept the table verbatim still read as having hand-edited it.
+    tail = "\n\n" if end < len(lines) else "\n"
+    old, new = "".join(lines[at + 1 : end]), "\n" + "\n".join(table) + tail
     # `section + "\n"`: Obsidian saves a last line, this heading perhaps, without its newline.
     return "".join(lines[:at]) + section + "\n" + new + "".join(lines[end:]), old, new
 

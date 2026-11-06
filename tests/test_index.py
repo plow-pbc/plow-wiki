@@ -303,10 +303,18 @@ def hub_wiki(wiki: Path) -> Path:
             HUB + TABLE + "## Notes\nKeep this.\n",
             id="mid-page",
         ),
+        # A page ends with one newline, as an editor saves it: a writer rewriting the hub whole
+        # with the table copied verbatim must not read as having hand-edited it.
         pytest.param(
-            HUB + "- a list build-hubs left", HUB + TABLE, id="last, saved without a final newline"
+            HUB + "- a list build-hubs left",
+            HUB + TABLE.removesuffix("\n"),
+            id="last, saved without a final newline",
         ),
-        pytest.param(HUB.removesuffix("\n"), HUB + TABLE, id="a bare heading on the last line"),
+        pytest.param(
+            HUB.removesuffix("\n"),
+            HUB + TABLE.removesuffix("\n"),
+            id="a bare heading on the last line",
+        ),
     ],
 )
 def test_a_section_table_lists_its_linking_pages_and_leaves_every_other_byte(
@@ -343,7 +351,7 @@ def test_a_link_planted_beside_a_hub_cannot_take_its_write(hub_wiki, tmp_path):
     (hub.parent / ".casa.md.tmp").symlink_to(outside)
     build(hub_wiki)
     assert outside.read_text() == "not the wiki's\n"
-    assert not hub.is_symlink() and TABLE in hub.read_text()
+    assert not hub.is_symlink() and TABLE.removesuffix("\n") in hub.read_text()
 
 
 def test_a_write_that_fails_leaves_the_hand_written_hub_whole(hub_wiki, monkeypatch):
@@ -357,6 +365,26 @@ def test_a_write_that_fails_leaves_the_hand_written_hub_whole(hub_wiki, monkeypa
     with pytest.raises(OSError):
         build(hub_wiki)
     assert hub.read_text() == before
+
+
+def test_a_restored_writer_leaves_the_index_able_to_run(hub_wiki):
+    """A night that added an operations page and was rolled back must not leave the hub's
+    restored table reading as hand-edited."""
+    build(hub_wiki)
+    assert run_wiki("snapshot", "--wiki", str(hub_wiki)).returncode == 0
+    meta = {
+        "type": "Operation",
+        "title": "Keys",
+        "description": "Lockbox",
+        "property": "[[str/properties/casa]]",
+    }
+    (hub_wiki / "str" / "operations" / "casa-keys.md").write_text(dump(meta, "\n- A fact.\n"))
+    build(hub_wiki)
+
+    assert run_wiki("restore", "--wiki", str(hub_wiki), "--writer", "str").returncode == 0
+    result = run_wiki("index", "--wiki", str(hub_wiki))
+    assert result.returncode == 0, result.stderr
+    assert "Keys" not in (hub_wiki / "str" / "properties" / "casa.md").read_text()
 
 
 @pytest.mark.parametrize(
