@@ -58,10 +58,11 @@ def test_second_identical_snapshot_is_a_noop(wiki):
     assert snapshot(wiki, author="a") is None
 
 
-def test_snapshot_refuses_a_credential_and_commits_nothing(wiki):
-    (wiki / "entities" / "people" / "leak.md").write_text(
-        "---\ntitle: L\n---\ntoken sk-abcdefghijklmnopqrstuvwxyz\n"
-    )
+@pytest.mark.parametrize(
+    "token", ["sk-abcdefghijklmnopqrstuvwxyz", "_sk-abcdefghijklmnopqrstuvwxyz_"]
+)
+def test_snapshot_refuses_a_credential_and_commits_nothing(wiki, token):
+    (wiki / "entities" / "people" / "leak.md").write_text(f"---\ntitle: L\n---\ntoken {token}\n")
     with pytest.raises(SystemExit) as e:
         snapshot(wiki, author="a")
     assert "entities/people/leak.md (line 4)" in str(e.value) and "sk-abcdef" not in str(e.value)
