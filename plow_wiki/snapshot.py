@@ -15,7 +15,8 @@ from plow_wiki import paths
 from plow_wiki.index import GENERATED, _replace
 
 CREDENTIAL = re.compile(
-    r"sk-[A-Za-z0-9_-]{16}|gh[pousr]_[A-Za-z0-9]{20}|github_pat_[A-Za-z0-9_]{20}"
+    # `sk-` opens words too ("ask-owner-..."): only a key that starts its own word.
+    r"(?<![\w-])sk-[A-Za-z0-9_-]{16}|gh[pousr]_[A-Za-z0-9]{20}|github_pat_[A-Za-z0-9_]{20}"
     r"|xox[abpr]-[A-Za-z0-9-]{10}|(?:AKIA|ASIA)[0-9A-Z]{16}|BEGIN [A-Z ]*PRIVATE KEY|eyJ[A-Za-z0-9_-]{20,}\."
 )
 # The scan reads `b/<path>` out of diff headers, so no gitconfig may reshape them.

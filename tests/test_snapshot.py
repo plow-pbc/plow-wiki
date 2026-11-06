@@ -69,6 +69,11 @@ def test_snapshot_refuses_a_credential_and_commits_nothing(wiki):
     assert _objects(wiki) == ("0", "0"), "the credential never reached the object database"
 
 
+def test_snapshot_commits_a_slug_that_merely_contains_sk(wiki):
+    (wiki / "log.md").write_text("added rule ask-owner-to-confirm-before-booking\n")
+    assert snapshot(wiki, author="a") is not None
+
+
 def test_snapshot_refuses_git_inside_and_undeclared_roots(wiki):
     (wiki / "stray").mkdir()
     with pytest.raises(SystemExit, match="undeclared top-level"):
