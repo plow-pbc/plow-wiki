@@ -394,3 +394,53 @@ def test_push_on_a_clean_tree_sends_the_commits_origin_does_not_have(wiki, tmp_p
     with pytest.raises(SystemExit, match="credential"):
         snapshot(wiki, author="a", push=True)
     assert _origin_head(origin) == committed.sha
+
+
+def test_under_vaultsync_snapshot_only_pushes_after_the_scan(wiki, tmp_path):
+    origin = tmp_path / "origin.git"
+    subprocess.run(["git", "init", "-q", "--bare", str(origin)], check=True)
+    snapshot(wiki, author="a")
+    _git(wiki, "remote", "add", "origin", str(origin))
+    _git(wiki, "config", "vaultsync.machine", "air")
+    page = wiki / "entities" / "people" / "jane.md"
+    page.write_text("---\ntitle: Jane\n---\n")
+    before = _objects(wiki)
+
+    # An edit vaultsync hasn't committed yet is left to it: no commit, no object.
+    assert snapshot(wiki, author="a") is None
+    assert _objects(wiki) == before
+
+    # What vaultsync committed goes to origin as is.
+    _hand_commit(wiki, "Update jane.md")
+    assert snapshot(wiki, author="a", push=True) == ("pushed", _head(wiki))
+    assert _origin_head(origin) == _head(wiki)
+
+    # The scan still refuses a credential before it leaves the machine.
+    page.write_text("---\ntitle: Jane\n---\nsk-abcdefghijklmnopqrstuvwxyz\n")
+    _hand_commit(wiki, "Update jane.md")
+    with pytest.raises(SystemExit, match="credential"):
+        snapshot(wiki, author="a", push=True)
+    assert _origin_head(origin) != _head(wiki)
+
+
+def test_under_vaultsync_a_commit_landing_after_the_scan_is_not_pushed(wiki, tmp_path, monkeypatch):
+    import plow_wiki.snapshot as snap
+
+    origin = tmp_path / "origin.git"
+    subprocess.run(["git", "init", "-q", "--bare", str(origin)], check=True)
+    snapshot(wiki, author="a")
+    _git(wiki, "remote", "add", "origin", str(origin))
+    _git(wiki, "config", "vaultsync.machine", "air")
+    scanned = _head(wiki)
+    scan = snap._scan_before_push
+
+    def vaultsync_commits_meanwhile(*args):
+        result = scan(*args)
+        leak = wiki / "entities" / "people" / "leak.md"
+        leak.write_text("---\ntitle: L\n---\nsk-abcdefghijklmnopqrstuvwxyz\n")
+        _hand_commit(wiki, "Update leak.md")
+        return result
+
+    monkeypatch.setattr(snap, "_scan_before_push", vaultsync_commits_meanwhile)
+    assert snapshot(wiki, author="a", push=True) == ("pushed", scanned)
+    assert _origin_head(origin) == scanned != _head(wiki)

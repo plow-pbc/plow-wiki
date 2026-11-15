@@ -85,6 +85,10 @@ Whichever agent runs the nightly calls, in order:
 wiki.toml gives you: a page another writer owns is theirs to fix. A night that
 fails validation is not snapshotted: `wiki restore --writer <your agent name>`
 puts your roots back to the last snapshot, and the failing pages are named in
-the digest to the owner, never guessed at. If the wiki
+the digest to the owner, never guessed at. When vaultsync syncs the wiki, it
+has already committed the night's pages, so record
+`git --git-dir ~/Plow/wiki.git rev-parse HEAD` before the night starts and
+undo with `vaultsync --vault ~/Plow/wiki rollback <that id> <root>` per root
+you own, in place of `wiki restore`. If the wiki
 was unreachable (the owner's Mac asleep), the next digest says so: "no wiki
 refresh since <date>".

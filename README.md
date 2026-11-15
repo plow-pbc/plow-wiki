@@ -72,7 +72,7 @@ tag with a `-` (`v0.2.0-rc.1`) publishes a prerelease.
 | `wiki init <path>` | Creates the wiki: `AGENTS.md`, `wiki.toml`, `log.md`, `_raw/`, one folder per root, each root's schema at `_meta/schemas/<root>.md`, and the `.env` (`OBSIDIAN_VAULT_PATH`, `OBSIDIAN_LINK_FORMAT=markdown`) obsidian-wiki's skills find the wiki by |
 | `wiki validate [--writer NAME]` | Checks every page's frontmatter against its root's schema; `--writer` checks only the roots `wiki.toml` gives NAME |
 | `wiki index` | Regenerates `index.md` and each root's declared tables with bundle-absolute markdown links, and `.wiki/chunks.json` (the facts agent recall embeds) |
-| `wiki snapshot` | Commits the wiki, less `.env`, into `<wiki>.git` beside it (`~/Plow/wiki.git`) after a credential scan |
+| `wiki snapshot` | Commits the wiki, less `.env`, into `<wiki>.git` beside it (`~/Plow/wiki.git`) after a credential scan; when vaultsync syncs the wiki, it only pushes what vaultsync committed, after the same scan |
 | `wiki history <path>` | Commits touching a page |
 | `wiki restore --writer NAME` | Puts NAME's roots back to the last snapshot — files changed since restored, files created since deleted — and leaves every other root alone |
 
