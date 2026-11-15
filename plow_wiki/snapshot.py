@@ -180,11 +180,24 @@ def _push(wiki: Path) -> str:
     return _git(wiki, "rev-parse", "--short", "HEAD").stdout.strip()
 
 
+def _vaultsync(wiki: Path) -> bool:
+    """vaultsync owns the history: it commits every edit, signed, and syncs it between machines."""
+    return (
+        history_dir(wiki).is_dir()
+        and _git(wiki, "config", "--get", "vaultsync.machine", check=False).returncode == 0
+    )
+
+
 def snapshot(wiki: Path, author: str, push: bool = False) -> Snapshot | None:
     paths.refuse_git_inside(wiki)
-    _refuse_undeclared_roots(wiki)
     if push and not _has_origin(wiki):
         sys.exit(f"--push: {history_dir(wiki)} has no 'origin' remote")
+    if _vaultsync(wiki):
+        # Only push: every other machine refuses a commit vaultsync didn't sign.
+        if push and _scan_before_push(wiki):
+            return Snapshot("pushed", _push(wiki))
+        return None
+    _refuse_undeclared_roots(wiki)
     _ensure_repo(wiki)
     _scan_worktree(wiki)  # a refused credential must never reach the object database
     # -f: no in-wiki .gitignore may hide a page from history, so only a pathspec leaves .env out
