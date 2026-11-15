@@ -134,7 +134,7 @@ def _has_origin(wiki: Path) -> bool:
     )
 
 
-def _scan_before_push(wiki: Path) -> bool:
+def _scan_before_push(wiki: Path, rev: str = "HEAD") -> bool:
     """Fail closed: scan everything about to leave the machine. False when origin already has it."""
     ref = _git(wiki, "ls-remote", "--exit-code", "origin", "main", check=False)
     if ref.returncode == 2:  # origin has no main yet: first push, scan all local history
@@ -147,7 +147,7 @@ def _scan_before_push(wiki: Path) -> bool:
                 "--no-ext-diff",
                 "--no-color",
                 "--text",
-                "HEAD",
+                rev,
                 check=False,
             ).stdout
         )
@@ -162,22 +162,22 @@ def _scan_before_push(wiki: Path) -> bool:
         "--no-ext-diff",
         "--no-color",
         "--text",
-        "FETCH_HEAD..HEAD",
+        f"FETCH_HEAD..{rev}",
         check=False,
     )
     if log.returncode != 0:
         sys.exit("--push: cannot reach origin/main; nothing was committed")
     _scan(log.stdout)
-    return ref.stdout.split()[0] != _git(wiki, "rev-parse", "HEAD").stdout.strip()
+    return ref.stdout.split()[0] != _git(wiki, "rev-parse", rev).stdout.strip()
 
 
-def _push(wiki: Path) -> str:
-    if _git(wiki, "push", "-q", "origin", "HEAD:main", check=False).returncode != 0:
+def _push(wiki: Path, rev: str = "HEAD") -> str:
+    if _git(wiki, "push", "-q", "origin", f"{rev}:refs/heads/main", check=False).returncode != 0:
         sys.exit(
             "--push: push to origin was rejected; run "
             f"`git --git-dir {history_dir(wiki)} push origin HEAD:main` by hand to see why"
         )
-    return _git(wiki, "rev-parse", "--short", "HEAD").stdout.strip()
+    return _git(wiki, "rev-parse", "--short", rev).stdout.strip()
 
 
 def _vaultsync(wiki: Path) -> bool:
@@ -194,8 +194,10 @@ def snapshot(wiki: Path, author: str, push: bool = False) -> Snapshot | None:
         sys.exit(f"--push: {history_dir(wiki)} has no 'origin' remote")
     if _vaultsync(wiki):
         # Only push: every other machine refuses a commit vaultsync didn't sign.
-        if push and _scan_before_push(wiki):
-            return Snapshot("pushed", _push(wiki))
+        # One commit, scanned and pushed: vaultsync moves HEAD on every edit.
+        head = _git(wiki, "rev-parse", "HEAD").stdout.strip()
+        if push and _scan_before_push(wiki, head):
+            return Snapshot("pushed", _push(wiki, head))
         return None
     _refuse_undeclared_roots(wiki)
     _ensure_repo(wiki)

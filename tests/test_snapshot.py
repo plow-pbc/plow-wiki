@@ -421,3 +421,26 @@ def test_under_vaultsync_snapshot_only_pushes_after_the_scan(wiki, tmp_path):
     with pytest.raises(SystemExit, match="credential"):
         snapshot(wiki, author="a", push=True)
     assert _origin_head(origin) != _head(wiki)
+
+
+def test_under_vaultsync_a_commit_landing_after_the_scan_is_not_pushed(wiki, tmp_path, monkeypatch):
+    import plow_wiki.snapshot as snap
+
+    origin = tmp_path / "origin.git"
+    subprocess.run(["git", "init", "-q", "--bare", str(origin)], check=True)
+    snapshot(wiki, author="a")
+    _git(wiki, "remote", "add", "origin", str(origin))
+    _git(wiki, "config", "vaultsync.machine", "air")
+    scanned = _head(wiki)
+    scan = snap._scan_before_push
+
+    def vaultsync_commits_meanwhile(*args):
+        result = scan(*args)
+        leak = wiki / "entities" / "people" / "leak.md"
+        leak.write_text("---\ntitle: L\n---\nsk-abcdefghijklmnopqrstuvwxyz\n")
+        _hand_commit(wiki, "Update leak.md")
+        return result
+
+    monkeypatch.setattr(snap, "_scan_before_push", vaultsync_commits_meanwhile)
+    assert snapshot(wiki, author="a", push=True) == ("pushed", scanned)
+    assert _origin_head(origin) == scanned != _head(wiki)
