@@ -46,8 +46,10 @@ class Snapshot(NamedTuple):
 
 
 def history_dir(wiki: Path) -> Path:
-    """Named for the wiki, so a scratch copy beside it (`wiki-e2e`) never shares its history."""
-    return wiki.parent / f"{wiki.name}.git"
+    """vaultsync's history inside the wiki, else one beside it named for the wiki, so a scratch
+    copy beside it (`wiki-e2e`) never shares its history."""
+    inside = wiki / paths.VAULTSYNC_HISTORY
+    return inside if inside.is_dir() else wiki.parent / f"{wiki.name}.git"
 
 
 def _git(wiki: Path, *args: str, check: bool = True, **env) -> subprocess.CompletedProcess:
@@ -98,7 +100,8 @@ def _scan_worktree(wiki: Path) -> None:
         rel = path.relative_to(wiki)
         # git stores a symlink as its target path, never the target's bytes: reading through
         # one would scan a file the wiki does not own and will never commit.
-        if path.is_symlink() or not path.is_file() or ".git" in rel.parts or str(rel) == ENV:
+        history = {".git", paths.VAULTSYNC_HISTORY} & set(rel.parts)
+        if path.is_symlink() or not path.is_file() or history or str(rel) == ENV:
             continue
         for n, line in enumerate(path.read_bytes().decode("utf-8", "replace").splitlines(), 1):
             if CREDENTIAL.search(line):

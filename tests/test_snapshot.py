@@ -396,10 +396,15 @@ def test_push_on_a_clean_tree_sends_the_commits_origin_does_not_have(wiki, tmp_p
     assert _origin_head(origin) == committed.sha
 
 
-def test_under_vaultsync_snapshot_only_pushes_after_the_scan(wiki, tmp_path):
+@pytest.mark.parametrize("layout", ["beside", "inside"])
+def test_under_vaultsync_snapshot_only_pushes_after_the_scan(wiki, tmp_path, layout):
     origin = tmp_path / "origin.git"
     subprocess.run(["git", "init", "-q", "--bare", str(origin)], check=True)
     snapshot(wiki, author="a")
+    if layout == "inside":
+        # vaultsync 0.3 and later keep the history in a hidden folder inside the wiki.
+        history_dir(wiki).rename(wiki / ".vaultsync")
+        assert history_dir(wiki) == wiki / ".vaultsync"
     _git(wiki, "remote", "add", "origin", str(origin))
     _git(wiki, "config", "vaultsync.machine", "air")
     page = wiki / "entities" / "people" / "jane.md"
