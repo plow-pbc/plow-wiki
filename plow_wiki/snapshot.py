@@ -101,7 +101,7 @@ def _scan_worktree(wiki: Path) -> None:
         rel = path.relative_to(wiki)
         # git stores a symlink as its target path, never the target's bytes: reading through
         # one would scan a file the wiki does not own and will never commit.
-        history = {".git", paths.VAULTSYNC_HISTORY} & set(rel.parts)
+        history = ".git" in rel.parts or rel.parts[0] == paths.VAULTSYNC_HISTORY
         if path.is_symlink() or not path.is_file() or history or str(rel) == ENV:
             continue
         for n, line in enumerate(path.read_bytes().decode("utf-8", "replace").splitlines(), 1):
