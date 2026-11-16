@@ -70,6 +70,15 @@ def test_snapshot_refuses_a_credential_and_commits_nothing(wiki, token):
     assert _objects(wiki) == ("0", "0"), "the credential never reached the object database"
 
 
+def test_snapshot_scans_a_nested_folder_named_like_vaultsyncs_history(wiki):
+    """Only the wiki's top-level .vaultsync is history; one deeper is pages like any other."""
+    nested = wiki / "entities" / ".vaultsync"
+    nested.mkdir()
+    (nested / "leak.md").write_text("token sk-abcdefghijklmnopqrstuvwxyz\n")
+    with pytest.raises(SystemExit, match="credential"):
+        snapshot(wiki, author="a")
+
+
 def test_snapshot_commits_a_slug_that_merely_contains_sk(wiki):
     (wiki / "log.md").write_text("added rule ask-owner-to-confirm-before-booking\n")
     assert snapshot(wiki, author="a") is not None
