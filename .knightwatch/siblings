@@ -2,5 +2,3 @@
 
 # latch ships this repo as its `wiki` plugin (latch-plugin.json).
 plow-pbc/latch-cli
-# The wiki snapshot pushes here; its layout is what this CLI writes.
-srosro/sams-plow-wiki
