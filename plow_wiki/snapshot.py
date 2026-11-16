@@ -36,8 +36,9 @@ _HUNK = re.compile(r"^(@{2,}) (?:-\d+(?:,\d+)? )+\+(\d+)(?:,\d+)? @")  # @@, and
 HOUSEKEEPING = (paths.SKIP_DIRS | {".trash", "attachments"}) - {".git"}
 # obsidian-wiki's vault config, which may carry API keys: never scanned, staged or committed.
 ENV = ".env"
-# Every page but ENV, shared by `add` and `status` so an untracked .env is never a change.
-_PAGES = ("--", ".", f":(exclude){ENV}")
+# Every page but ENV and vaultsync's history, shared by `add` and `status` so an untracked .env
+# is never a change.
+_PAGES = ("--", ".", f":(exclude){ENV}", f":(exclude){paths.VAULTSYNC_HISTORY}")
 
 
 class Snapshot(NamedTuple):
