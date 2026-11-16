@@ -13,9 +13,11 @@ from obsidian_wiki.graph_analysis import SKIP_DIRS as OBSIDIAN_SKIP_DIRS
 
 from plow_wiki.frontmatter import FrontmatterError, parse
 
+# Where vaultsync keeps a wiki's history: inside it, hidden.
+VAULTSYNC_HISTORY = ".vaultsync"
 # obsidian-wiki's own page selection, which it requires every module walking the vault to share,
-# plus plow-wiki's generated-file record and git.
-SKIP_DIRS = OBSIDIAN_SKIP_DIRS | {".wiki", ".git"}
+# plus plow-wiki's generated-file record, git, and vaultsync's history.
+SKIP_DIRS = OBSIDIAN_SKIP_DIRS | {".wiki", ".git", VAULTSYNC_HISTORY}
 SKIP_FILES = frozenset({"index.md", "log.md", "hot.md", "AGENTS.md"})
 DEFAULT_WIKI = "~/Plow/wiki"
 _SAFE_SEGMENT = re.compile(r"[A-Za-z0-9._-]+")
@@ -34,7 +36,9 @@ def resolve_wiki(arg: str | None) -> Path:
 
 def refuse_git_inside(wiki: Path) -> None:
     if (wiki / ".git").exists():
-        sys.exit(f"{wiki}/.git exists — the wiki must not be a git repo; history lives beside it")
+        sys.exit(
+            f"{wiki}/.git exists — the wiki must not be a git repo; history lives beside it or in {VAULTSYNC_HISTORY}"
+        )
 
 
 def load_roots(wiki: Path) -> dict[str, str]:
